@@ -4067,7 +4067,7 @@ const PagedEditorComponent = forwardRef<PagedEditorRef, PagedEditorProps>(
           )}
         </div>
 
-        {/* Sidebar overlay — height-constrained to match visual document height */}
+        {/* Sidebar overlay — positioned to match visual document height, visible overflow for sidebar items */}
         {sidebarOverlay && (
           <div
             style={{
@@ -4077,7 +4077,7 @@ const PagedEditorComponent = forwardRef<PagedEditorRef, PagedEditorProps>(
               right: 0,
               height: totalHeight * zoom,
               pointerEvents: 'none',
-              overflow: 'hidden',
+              overflow: 'visible',
             }}
           >
             <div style={{ pointerEvents: 'auto' }}>{sidebarOverlay}</div>
