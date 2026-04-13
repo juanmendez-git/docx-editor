@@ -34,6 +34,7 @@ import type { EditorView } from 'prosemirror-view';
 import { HiddenProseMirror, type HiddenProseMirrorRef } from './HiddenProseMirror';
 import { SelectionOverlay } from './SelectionOverlay';
 import { ImageSelectionOverlay, type ImageSelectionInfo } from './ImageSelectionOverlay';
+import { DecorationLayer } from './DecorationLayer';
 
 // Layout engine
 import { layoutDocument } from '@eigenpal/docx-core/layout-engine';
@@ -1711,6 +1712,11 @@ const PagedEditorComponent = forwardRef<PagedEditorRef, PagedEditorProps>(
     // Selection gate - ensures selection renders only when layout is current
     const syncCoordinator = useMemo(() => new LayoutSelectionGate(), []);
 
+    // Bumps on every PM transaction (doc, selection, meta-only). Drives the
+    // DecorationLayer's resync so plugins like yCursorPlugin (which update
+    // decorations on awareness pings — non-doc transactions) propagate.
+    const [transactionVersion, setTransactionVersion] = useState(0);
+
     // Compute page size and margins
     const pageSize = useMemo(() => getPageSize(sectionProperties), [sectionProperties]);
     const margins = useMemo(() => getMargins(sectionProperties), [sectionProperties]);
@@ -2385,6 +2391,11 @@ const PagedEditorComponent = forwardRef<PagedEditorRef, PagedEditorProps>(
      */
     const handleTransaction = useCallback(
       (transaction: Transaction, newState: EditorState) => {
+        // Bump on every transaction (including selection-only and meta-only
+        // ones) so DecorationLayer re-syncs — yCursorPlugin awareness updates
+        // arrive as meta transactions with no doc change.
+        setTransactionVersion((v) => v + 1);
+
         if (transaction.docChanged) {
           // Increment state sequence to signal document changed
           syncCoordinator.incrementStateSeq();
@@ -4078,6 +4089,17 @@ const PagedEditorComponent = forwardRef<PagedEditorRef, PagedEditorProps>(
               {pluginOverlays}
             </div>
           )}
+
+          {/* Generic PM decoration forwarder — surfaces yCursorPlugin remote
+              cursors, search-highlight plugins, etc. on the visible pages.
+              No-op when no plugin emits decorations. */}
+          <DecorationLayer
+            getView={() => hiddenPMRef.current?.getView() ?? null}
+            getPagesContainer={() => pagesContainerRef.current}
+            zoom={zoom}
+            transactionVersion={transactionVersion}
+            syncCoordinator={syncCoordinator}
+          />
         </div>
 
         {/* Sidebar overlay — positioned to match visual document height, visible overflow for sidebar items */}
