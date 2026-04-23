@@ -1,5 +1,5 @@
 <p align="center">
-  <a href="https://github.com/eigenpal/docx-js-editor">
+  <a href="https://github.com/eigenpal/docx-editor">
     <img src="./assets/logo.png" alt="DOCX JS Editor" width="600" />
   </a>
 </p>
@@ -60,7 +60,6 @@ function Editor({ file }: { file: ArrayBuffer }) {
 
 ```tsx
 import { DocxEditor, PluginHost, templatePlugin } from '@eigenpal/docx-js-editor';
-
 <PluginHost plugins={[templatePlugin]}>
   <DocxEditor documentBuffer={file} />
 </PluginHost>;
