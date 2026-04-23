@@ -9,7 +9,7 @@
   },
   "dependencies": {
     "@eigenpal/docx-editor-vue": "workspace:*",
-    "@eigenpal/docx-core": "file:../../packages/core",
+    "@eigenpal/docx-core": "workspace:*",
     "vue": "^3.5.0"
   },
   "devDependencies": {

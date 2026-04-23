@@ -7,7 +7,7 @@
     "start": "next start"
   },
   "dependencies": {
-    "@eigenpal/docx-core": "file:../../packages/core",
+    "@eigenpal/docx-core": "workspace:*",
     "@eigenpal/docx-editor-agents": "workspace:*",
     "@eigenpal/docx-js-editor": "workspace:*",
     "next": "^15.3.3",
