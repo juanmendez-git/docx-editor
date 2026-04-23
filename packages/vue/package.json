@@ -38,7 +38,7 @@
   "license": "MIT",
   "repository": {
     "type": "git",
-    "url": "https://github.com/juanmendez-git/docx-editor.git",
+    "url": "https://github.com/eigenpal/docx-js-editor.git",
     "directory": "packages/vue"
   },
   "publishConfig": {

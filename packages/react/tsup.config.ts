@@ -17,9 +17,6 @@ export default defineConfig({
   clean: true,
   treeshake: true,
   minify: true,
-  // Bundle docx-core: published core only ships aggregated entries (core/headless/…),
-  // not per-file dist for deep imports — leaving core external breaks Vite/Rollup consumers.
-  noExternal: ['@eigenpal/docx-core'],
   external: [
     'react',
     'react-dom',

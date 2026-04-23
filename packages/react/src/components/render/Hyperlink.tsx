@@ -100,7 +100,7 @@ export function Hyperlink({
           const targetId = hyperlink.anchor;
           const targetElement = document.getElementById(targetId);
           if (targetElement) {
-            targetElement.scrollIntoView({ block: 'start' });
+            targetElement.scrollIntoView({ behavior: 'smooth', block: 'start' });
           }
         }
       }

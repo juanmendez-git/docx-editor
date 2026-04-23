@@ -1,6 +1,6 @@
 {
   "name": "@eigenpal/docx-editor-agents",
-  "version": "0.0.36",
+  "version": "0.0.35",
   "description": "Agent-friendly API for DOCX document review — read, comment, propose changes, accept/reject tracked changes",
   "main": "./dist/index.js",
   "module": "./dist/index.mjs",
@@ -53,7 +53,7 @@
   "license": "AGPL-3.0-or-later",
   "repository": {
     "type": "git",
-    "url": "https://github.com/juanmendez-git/docx-editor.git",
+    "url": "https://github.com/eigenpal/docx-js-editor.git",
     "directory": "packages/agent-use"
   },
   "publishConfig": {

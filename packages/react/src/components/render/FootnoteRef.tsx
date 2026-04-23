@@ -183,7 +183,7 @@ export function FootnoteRef({
         const noteElementId = type === 'footnote' ? `footnote-${id}` : `endnote-${id}`;
         const noteElement = document.getElementById(noteElementId);
         if (noteElement) {
-          noteElement.scrollIntoView({ block: 'center' });
+          noteElement.scrollIntoView({ behavior: 'smooth', block: 'center' });
           noteElement.focus();
         }
       }
