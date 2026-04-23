@@ -1,6 +1,6 @@
 {
   "name": "@juanmendez90/docx-js-editor",
-  "version": "1.1.0",
+  "version": "1.1.1",
   "description": "A browser-based DOCX template editor with variable insertion support",
   "main": "./dist/index.js",
   "module": "./dist/index.mjs",
@@ -92,7 +92,7 @@
     }
   },
   "dependencies": {
-    "@juanmendez90/docx-core": "^1.0.0",
+    "@juanmendez90/docx-core": "^1.0.1",
     "@radix-ui/react-select": "^2.2.6",
     "clsx": "^2.1.0",
     "prosemirror-commands": "^1.5.2",
