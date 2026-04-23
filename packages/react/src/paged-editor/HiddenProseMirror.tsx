@@ -28,7 +28,6 @@ import {
 import { CellSelection } from 'prosemirror-tables';
 import { EditorView, type DirectEditorProps } from 'prosemirror-view';
 import { undo, redo } from 'prosemirror-history';
-
 import { schema } from '@eigenpal/docx-core/prosemirror/schema';
 import { toProseDoc, createEmptyDoc } from '@eigenpal/docx-core/prosemirror/conversion';
 import { fromProseDoc } from '@eigenpal/docx-core/prosemirror/conversion/fromProseDoc';
@@ -38,6 +37,9 @@ import type { Document, Theme, StyleDefinitions } from '@eigenpal/docx-core/type
 // Import ProseMirror CSS
 import 'prosemirror-view/style/prosemirror.css';
 import '@eigenpal/docx-core/prosemirror/editor.css';
+
+/** @see prosemirror-state `Transaction` flags — not exported; must match PM internals. */
+const PM_UPDATED_SCROLL = 4;
 
 // ============================================================================
 // TYPES
@@ -246,6 +248,10 @@ const HiddenProseMirrorComponent = forwardRef<HiddenProseMirrorRef, HiddenProseM
       const editorProps: DirectEditorProps = {
         state: initialState,
         editable: () => !readOnly,
+        // Keeps `overflow-anchor` on the PM root across outer-deco sync (prosemirror#933).
+        attributes: {
+          style: 'overflow-anchor: none',
+        },
         // Use a regular function (not arrow) so ProseMirror's `.call(this, tr)`
         // binding gives us the EditorView. This is critical: plugins like ySyncPlugin
         // dispatch transactions during EditorView construction (in their `view()`
@@ -256,6 +262,13 @@ const HiddenProseMirrorComponent = forwardRef<HiddenProseMirrorRef, HiddenProseM
           // Ensure viewRef is set — may be called during construction before
           // the `new EditorView()` assignment on the next line completes.
           if (!viewRef.current) viewRef.current = this;
+
+          // Paginated layer owns scroll; strip PM scroll flag so updateState does not
+          // use scroll-to-selection / preserve-path ancestor scroll correction on our scroller.
+          const trInner = transaction as unknown as { updated?: number };
+          if (typeof trInner.updated === 'number') {
+            trInner.updated &= ~PM_UPDATED_SCROLL;
+          }
 
           const newState = this.state.apply(transaction);
           this.updateState(newState);
@@ -286,6 +299,10 @@ const HiddenProseMirrorComponent = forwardRef<HiddenProseMirrorRef, HiddenProseM
       };
 
       viewRef.current = new EditorView(hostRef.current, editorProps);
+      const pmRoot = viewRef.current.dom as HTMLElement;
+      pmRoot.style.setProperty('overflow-anchor', 'none');
+      const pmStyle = pmRoot.style as unknown as { overflowAnchor?: string | null };
+      if (pmStyle.overflowAnchor == null) pmStyle.overflowAnchor = 'none';
 
       // Mark as initialized so the document-change effect skips the redundant
       // first-mount updateState (createView already set the initial state).

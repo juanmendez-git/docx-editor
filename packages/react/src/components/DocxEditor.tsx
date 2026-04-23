@@ -3780,6 +3780,7 @@ body { background: white; }
     minWidth: 0, // Allow flex item to shrink below content width on narrow viewports
     overflow: 'auto', // Sole scroll container — PagedEditor sizes to content
     position: 'relative',
+    overflowAnchor: 'none',
   };
 
   // Render loading state

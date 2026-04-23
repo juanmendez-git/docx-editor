@@ -1394,6 +1394,8 @@ const VIRTUALIZATION_THRESHOLD = 8;
  * An IntersectionObserver watches page elements and populates/clears
  * content as pages scroll into and out of view.
  */
+export type RenderPagesUpdateKind = 'incremental' | 'full';
+
 export function renderPages(
   pages: Page[],
   container: HTMLElement,
@@ -1401,7 +1403,7 @@ export function renderPages(
     pageGap?: number;
     footnotesByPage?: Map<number, FootnoteRenderItem[]>;
   } = {}
-): void {
+): RenderPagesUpdateKind {
   const totalPages = pages.length;
   const pageGap = options.pageGap ?? 24;
   const pc = container as PageContainer;
@@ -1513,7 +1515,7 @@ export function renderPages(
     prevState.totalPages = totalPages;
     prevState.currentOptions = options;
 
-    return;
+    return 'incremental';
   }
 
   // --- FULL REBUILD PATH ---
@@ -1561,7 +1563,7 @@ export function renderPages(
   if (!useVirtualization) {
     // Store state for potential future incremental updates (won't be used
     // since small docs skip the incremental path, but keeps data consistent)
-    return;
+    return 'full';
   }
 
   // --- Virtualization via IntersectionObserver ---
@@ -1667,6 +1669,8 @@ export function renderPages(
   for (let i = 0; i < initialRenderCount; i++) {
     populatePageShell(pageShells[i], pageDataMap, totalPages, options);
   }
+
+  return 'full';
 }
 
 /**
