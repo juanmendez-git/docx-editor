@@ -3,7 +3,7 @@ import * as Y from 'yjs';
 import { WebrtcProvider } from 'y-webrtc';
 import { ySyncPlugin, yCursorPlugin, yUndoPlugin } from 'y-prosemirror';
 import type { Plugin } from 'prosemirror-state';
-import type { Comment } from '@eigenpal/docx-core/types/content';
+import type { Comment } from '@juanmendez90/docx-core/types/content';
 
 export interface CollaborativeUser {
   clientId: number;
@@ -39,7 +39,6 @@ export function useCollaboration(
     const plugins = [ySyncPlugin(fragment), yCursorPlugin(provider.awareness), yUndoPlugin()];
     const yComments = ydoc.getArray<Comment>('comments');
     return { ydoc, provider, plugins, yComments };
-     
   }, [roomName]);
 
   const [users, setUsers] = useState<CollaborativeUser[]>([]);

@@ -1,5 +1,5 @@
 {
-  "name": "@eigenpal/docx-editor-vue",
+  "name": "@juanmendez90/docx-editor-vue",
   "version": "0.0.1",
   "private": true,
   "description": "Vue.js wrapper for the DOCX editor - community contributed",
@@ -25,7 +25,7 @@
     "vue": "^3.0.0"
   },
   "dependencies": {
-    "@eigenpal/docx-core": "file:../core"
+    "@juanmendez90/docx-core": "file:../core"
   },
   "keywords": [
     "docx",
@@ -45,6 +45,7 @@
     "access": "public"
   },
   "devDependencies": {
-    "prosemirror-view": "^1.41.6"
+    "prosemirror-view": "^1.41.6",
+    "vue": "^3.5.13"
   }
 }

@@ -1,5 +1,5 @@
 /**
- * @eigenpal/docx-js-editor
+ * @juanmendez90/docx-js-editor
  *
  * A complete WYSIWYG DOCX editor with full Microsoft Word fidelity.
  *
@@ -16,7 +16,7 @@
  * CSS Styles:
  * For optimal cursor visibility and selection highlighting, import the editor styles:
  * ```
- * import '@eigenpal/docx-js-editor/styles/editor.css';
+ * import '@juanmendez90/docx-js-editor/styles/editor.css';
  * ```
  */
 
@@ -37,36 +37,36 @@ export {
   type EditorMode,
 } from './components/DocxEditor';
 export { renderAsync, type RenderAsyncOptions, type DocxEditorHandle } from './renderAsync';
-export { type DocxInput, toArrayBuffer } from '@eigenpal/docx-core/utils/docxInput';
+export { type DocxInput, toArrayBuffer } from '@juanmendez90/docx-core/utils/docxInput';
 
 // ============================================================================
 // AGENT API
 // ============================================================================
 
-export { DocumentAgent } from '@eigenpal/docx-core/agent/DocumentAgent';
-export { executeCommand, executeCommands } from '@eigenpal/docx-core/agent/executor';
+export { DocumentAgent } from '@juanmendez90/docx-core/agent/DocumentAgent';
+export { executeCommand, executeCommands } from '@juanmendez90/docx-core/agent/executor';
 export {
   getAgentContext,
   getDocumentSummary,
   type AgentContextOptions,
-} from '@eigenpal/docx-core/agent/context';
+} from '@juanmendez90/docx-core/agent/context';
 export {
   buildSelectionContext,
   buildExtendedSelectionContext,
   type SelectionContextOptions,
   type ExtendedSelectionContext,
-} from '@eigenpal/docx-core/agent/selectionContext';
+} from '@juanmendez90/docx-core/agent/selectionContext';
 
 // ============================================================================
 // PARSER / SERIALIZER
 // ============================================================================
 
-export { parseDocx } from '@eigenpal/docx-core/docx/parser';
+export { parseDocx } from '@juanmendez90/docx-core/docx/parser';
 export {
   serializeDocument as serializeDocx,
   serializeDocumentBody,
   serializeSectionProperties,
-} from '@eigenpal/docx-core/docx/serializer/documentSerializer';
+} from '@juanmendez90/docx-core/docx/serializer/documentSerializer';
 export {
   processTemplate,
   processTemplateDetailed,
@@ -75,7 +75,7 @@ export {
   validateTemplate,
   type ProcessTemplateOptions,
   type ProcessTemplateResult,
-} from '@eigenpal/docx-core/utils/processTemplate';
+} from '@juanmendez90/docx-core/utils/processTemplate';
 
 // ============================================================================
 // DOCUMENT CREATION
@@ -85,7 +85,7 @@ export {
   createEmptyDocument,
   createDocumentWithText,
   type CreateEmptyDocumentOptions,
-} from '@eigenpal/docx-core/utils/createDocument';
+} from '@juanmendez90/docx-core/utils/createDocument';
 
 // ============================================================================
 // FONT LOADER
@@ -101,7 +101,7 @@ export {
   onFontsLoaded,
   canRenderFont,
   preloadCommonFonts,
-} from '@eigenpal/docx-core/utils/fontLoader';
+} from '@juanmendez90/docx-core/utils/fontLoader';
 
 // ============================================================================
 // UI COMPONENTS
@@ -452,7 +452,7 @@ export type {
   NumberingDefinitions,
   Relationship,
   Comment,
-} from '@eigenpal/docx-core/types/document';
+} from '@juanmendez90/docx-core/types/document';
 
 // Agent API types
 export type {
@@ -475,7 +475,7 @@ export type {
   InsertHyperlinkCommand,
   SetVariableCommand,
   ApplyStyleCommand,
-} from '@eigenpal/docx-core/types/agentApi';
+} from '@juanmendez90/docx-core/types/agentApi';
 
 // ============================================================================
 // HOOKS
@@ -531,7 +531,7 @@ export {
   pixelsToEmu,
   emuToTwips,
   twipsToEmu,
-} from '@eigenpal/docx-core/utils/units';
+} from '@juanmendez90/docx-core/utils/units';
 export {
   resolveColor,
   resolveHighlightColor,
@@ -546,7 +546,7 @@ export {
   isBlack,
   isWhite,
   colorsEqual,
-} from '@eigenpal/docx-core/utils/colorResolver';
+} from '@juanmendez90/docx-core/utils/colorResolver';
 export {
   createPageBreak,
   createColumnBreak,
@@ -565,7 +565,7 @@ export {
   findPageBreaks,
   removePageBreak,
   type InsertPosition,
-} from '@eigenpal/docx-core/utils/insertOperations';
+} from '@juanmendez90/docx-core/utils/insertOperations';
 
 // Selection highlighting
 export {
@@ -601,7 +601,7 @@ export {
   type HighlightRect,
   type SelectionHighlightConfig,
   type SelectionRange,
-} from '@eigenpal/docx-core/utils/selectionHighlight';
+} from '@juanmendez90/docx-core/utils/selectionHighlight';
 
 // Text selection utilities for word/paragraph selection
 export {
@@ -618,7 +618,7 @@ export {
   createDoubleClickWordSelector,
   createTripleClickParagraphSelector,
   type WordSelectionResult,
-} from '@eigenpal/docx-core/utils/textSelection';
+} from '@juanmendez90/docx-core/utils/textSelection';
 
 // Keyboard navigation
 export {
@@ -656,7 +656,7 @@ export {
   NAVIGATION_SHORTCUTS,
   describeShortcut,
   getNavigationShortcutDescriptions,
-} from '@eigenpal/docx-core/utils/keyboardNavigation';
+} from '@juanmendez90/docx-core/utils/keyboardNavigation';
 
 // Clipboard utilities
 export {
@@ -687,7 +687,7 @@ export {
   type ClipboardContent,
   type ParsedClipboardContent,
   type ClipboardOptions,
-} from '@eigenpal/docx-core/utils/clipboard';
+} from '@juanmendez90/docx-core/utils/clipboard';
 
 // ============================================================================
 // PLUGIN API
@@ -742,4 +742,4 @@ export {
   type McpToolHandler,
   type McpToolResult,
   type McpSession,
-} from '@eigenpal/docx-core/core-plugins';
+} from '@juanmendez90/docx-core/core-plugins';

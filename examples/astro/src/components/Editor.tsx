@@ -4,7 +4,7 @@ import {
   type DocxEditorRef,
   createEmptyDocument,
   type Document,
-} from '@eigenpal/docx-js-editor';
+} from '@juanmendez90/docx-js-editor';
 import { ExampleSwitcher } from '../../../shared/ExampleSwitcher';
 import { GitHubBadge } from '../../../shared/GitHubBadge';
 

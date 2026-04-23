@@ -71,7 +71,7 @@ Set `externalContent` when something other than the `document` prop is the sourc
 
 ```tsx
 import { useMemo } from 'react';
-import { DocxEditor, createEmptyDocument } from '@eigenpal/docx-js-editor';
+import { DocxEditor, createEmptyDocument } from '@juanmendez90/docx-js-editor';
 import { ySyncPlugin, yUndoPlugin } from 'y-prosemirror';
 
 function CollaborativeEditor({ ydoc }) {
@@ -91,7 +91,7 @@ Comment thread metadata (text, author, replies, resolved status) lives outside t
 ```tsx
 import { useEffect, useState, useCallback } from 'react';
 import * as Y from 'yjs';
-import type { Comment } from '@eigenpal/docx-js-editor';
+import type { Comment } from '@juanmendez90/docx-js-editor';
 
 function useSyncedComments(ydoc: Y.Doc): [Comment[], (next: Comment[]) => void] {
   const yComments = ydoc.getArray<Comment>('comments');

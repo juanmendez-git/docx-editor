@@ -1,4 +1,4 @@
-# @eigenpal/docx-js-editor
+# @juanmendez90/docx-js-editor
 
 ## 0.0.35
 

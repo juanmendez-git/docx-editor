@@ -15,14 +15,14 @@
 
 import React, { useCallback } from 'react';
 import type { CSSProperties, MouseEvent } from 'react';
-import type { Hyperlink as HyperlinkType, Theme } from '@eigenpal/docx-core/types/document';
+import type { Hyperlink as HyperlinkType, Theme } from '@juanmendez90/docx-core/types/document';
 import { Run } from './Run';
 import {
   isExternalLink,
   isInternalLink,
   getHyperlinkText,
   getHyperlinkUrl,
-} from '@eigenpal/docx-core/docx/hyperlinkParser';
+} from '@juanmendez90/docx-core/docx/hyperlinkParser';
 
 /**
  * Props for the Hyperlink component

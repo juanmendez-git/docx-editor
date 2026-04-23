@@ -6,8 +6,8 @@
  *
  * @example
  * ```ts
- * import { createMcpServer, startStdioServer } from '@eigenpal/docx-editor/mcp';
- * import { pluginRegistry, docxtemplaterPlugin } from '@eigenpal/docx-editor/core-plugins';
+ * import { createMcpServer, startStdioServer } from '@juanmendez90/docx-editor/mcp';
+ * import { pluginRegistry, docxtemplaterPlugin } from '@juanmendez90/docx-editor/core-plugins';
  *
  * // Register plugins
  * pluginRegistry.register(docxtemplaterPlugin);
