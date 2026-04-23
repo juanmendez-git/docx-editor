@@ -29,6 +29,9 @@ import { CellSelection } from 'prosemirror-tables';
 import { EditorView, type DirectEditorProps } from 'prosemirror-view';
 import { undo, redo } from 'prosemirror-history';
 
+/** @see prosemirror-state `Transaction` flags — not exported; must match PM internals. */
+const PM_UPDATED_SCROLL = 4;
+
 import { schema } from '@juanmendez90/docx-core/prosemirror/schema';
 import { toProseDoc, createEmptyDoc } from '@juanmendez90/docx-core/prosemirror/conversion';
 import { fromProseDoc } from '@juanmendez90/docx-core/prosemirror/conversion/fromProseDoc';
@@ -124,8 +127,6 @@ const HIDDEN_HOST_STYLES: CSSProperties = {
   pointerEvents: 'none',
   // Prevent text selection in hidden area
   userSelect: 'none',
-  // Prevent scroll anchoring issues
-  overflowAnchor: 'none',
   // Don't set aria-hidden - editor must remain accessible to screen readers
 };
 
@@ -246,6 +247,12 @@ const HiddenProseMirrorComponent = forwardRef<HiddenProseMirrorRef, HiddenProseM
       const editorProps: DirectEditorProps = {
         state: initialState,
         editable: () => !readOnly,
+        // Included in root outer deco every update so PM does not strip it when syncing attrs.
+        // Without this, updateStateInner runs storeScrollPos/resetScrollPos on ancestors when
+        // scroll mode is "preserve" (see prosemirror-view updateStateInner + issue #933).
+        attributes: {
+          style: 'overflow-anchor: none',
+        },
         // Use a regular function (not arrow) so ProseMirror's `.call(this, tr)`
         // binding gives us the EditorView. This is critical: plugins like ySyncPlugin
         // dispatch transactions during EditorView construction (in their `view()`
@@ -256,6 +263,14 @@ const HiddenProseMirrorComponent = forwardRef<HiddenProseMirrorRef, HiddenProseM
           // Ensure viewRef is set — may be called during construction before
           // the `new EditorView()` assignment on the next line completes.
           if (!viewRef.current) viewRef.current = this;
+
+          // The visible document scrolls via the paginated layer, not this off-screen
+          // mirror. Clearing PM's scroll flag prevents updateState from treating the
+          // transaction as "scroll to selection" (scrollRectIntoView / ancestor scroll).
+          const trInner = transaction as unknown as { updated?: number };
+          if (typeof trInner.updated === 'number') {
+            trInner.updated &= ~PM_UPDATED_SCROLL;
+          }
 
           const newState = this.state.apply(transaction);
           this.updateState(newState);
@@ -381,6 +396,9 @@ const HiddenProseMirrorComponent = forwardRef<HiddenProseMirrorRef, HiddenProseM
         },
 
         focus() {
+          // Use EditorView.focus(), not raw dom.focus(): the browser restores the
+          // previous DOM selection when re-focusing a contenteditable; PM must run
+          // selectionToDOM after focus so typing matches state.selection (overlay).
           viewRef.current?.focus();
         },
 
@@ -428,10 +446,19 @@ const HiddenProseMirrorComponent = forwardRef<HiddenProseMirrorRef, HiddenProseM
         setSelection(anchor: number, head?: number) {
           if (!viewRef.current) return;
           const { state, dispatch } = viewRef.current;
-          const $anchor = state.doc.resolve(anchor);
-          const $head = head !== undefined ? state.doc.resolve(head) : $anchor;
-          const selection = TextSelection.between($anchor, $head);
-          dispatch(state.tr.setSelection(selection));
+          const headPos = head !== undefined ? head : anchor;
+          try {
+            const selection = TextSelection.create(state.doc, anchor, headPos);
+            dispatch(state.tr.setSelection(selection));
+          } catch {
+            try {
+              const clamped = Math.max(0, Math.min(anchor, state.doc.content.size));
+              const selection = TextSelection.near(state.doc.resolve(clamped), 1);
+              dispatch(state.tr.setSelection(selection));
+            } catch {
+              /* invalid range — leave selection unchanged */
+            }
+          }
         },
 
         setNodeSelection(pos: number) {

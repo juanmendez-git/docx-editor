@@ -19,11 +19,13 @@ import React, {
   useState,
   useCallback,
   useEffect,
+  useLayoutEffect,
   useMemo,
   forwardRef,
   useImperativeHandle,
   memo,
 } from 'react';
+import { createPortal } from 'react-dom';
 import type { CSSProperties } from 'react';
 import { NodeSelection, TextSelection } from 'prosemirror-state';
 import type { EditorState, Transaction, Plugin } from 'prosemirror-state';
@@ -69,6 +71,7 @@ import {
 import {
   addRowBelow,
   addColumnRight,
+  findEndPosForParaId,
   findStartPosForParaId,
 } from '@juanmendez90/docx-core/prosemirror';
 
@@ -105,6 +108,7 @@ import { LayoutPainter, type BlockLookup } from '@juanmendez90/docx-core/layout-
 import {
   renderPages,
   type RenderPageOptions,
+  type RenderPagesUpdateKind,
   type HeaderFooterContent,
   type FootnoteRenderItem,
 } from '@juanmendez90/docx-core/layout-painter/renderPage';
@@ -140,6 +144,23 @@ import { createRenderedDomContext } from '../plugin-api/RenderedDomContext';
 import { findVerticalScrollParentOrRoot } from './findVerticalScrollParent';
 
 /**
+ * Largest painted `[data-pm-start]` value ≤ `pmPos`. Used to keep the same block anchored
+ * in the viewport when `renderPages` wipes and rebuilds the DOM (small docs / full rebuild).
+ */
+function findPaintedPmStartAtOrBefore(pages: HTMLElement, pmPos: number): number | null {
+  let best: number | null = null;
+  const list = pages.querySelectorAll<HTMLElement>('[data-pm-start]');
+  for (let i = 0; i < list.length; i++) {
+    const raw = list[i].dataset.pmStart;
+    if (raw == null) continue;
+    const p = Number(raw);
+    if (Number.isNaN(p)) continue;
+    if (p <= pmPos && (best === null || p > best)) best = p;
+  }
+  return best;
+}
+
+/**
  * Vertically scroll `container` so `el`'s center aligns with the container's visible center.
  * Avoids `element.scrollIntoView()` — it misbehaves when content sits under CSS `transform`
  * (e.g. zoom viewport); see `useVisualLineNavigation` scrollIntoViewIfNeeded comment.
@@ -161,27 +182,6 @@ function scrollElementCenterIntoContainer(
   } else {
     container.scrollTop = targetTop;
   }
-}
-
-/** True when the target is mostly outside the scroller (prefer `instant`). */
-function isScrollTargetFar(el: HTMLElement, scroller: HTMLElement): boolean {
-  const er = el.getBoundingClientRect();
-  const sr = scroller.getBoundingClientRect();
-
-  const overlapTop = Math.max(er.top, sr.top);
-  const overlapBottom = Math.min(er.bottom, sr.bottom);
-  const overlapH = Math.max(0, overlapBottom - overlapTop);
-  const elH = Math.max(1, er.height);
-  const visibleRatio = overlapH / elH;
-
-  const edgePad = 4;
-  const fullyOutside = er.bottom <= sr.top + edgePad || er.top >= sr.bottom - edgePad;
-  if (fullyOutside) {
-    return true;
-  }
-
-  const minVisibleRatio = 0.22;
-  return visibleRatio < minVisibleRatio;
 }
 
 // =============================================================================
@@ -347,6 +347,12 @@ const pagesContainerStyles: CSSProperties = {
   flexDirection: 'column',
   alignItems: 'center',
 };
+
+/** Min-height of the zoom/viewport wrapper (padding + page stack). Must match JSX `totalHeight`. */
+function viewportMinHeightPx(layout: Layout, pageHeight: number, pageGap: number): number {
+  const n = layout.pages.length;
+  return n * pageHeight + Math.max(0, n - 1) * pageGap + VIEWPORT_PADDING_TOP + 24;
+}
 
 const pluginOverlaysStyles: CSSProperties = {
   position: 'absolute',
@@ -1656,6 +1662,19 @@ const PagedEditorComponent = forwardRef<PagedEditorRef, PagedEditorProps>(
     // Refs
     const containerRef = useRef<HTMLDivElement>(null);
     const pagesContainerRef = useRef<HTMLDivElement>(null);
+    /** Sync minHeight/marginBottom here in the layout pipeline before scroll restore — React state lags one frame. */
+    const viewportLayoutRef = useRef<HTMLDivElement>(null);
+    /** Scroll restore runs in useLayoutEffect so it sees final scrollHeight after React commits viewport styles. */
+    const pendingScrollRestoreRef = useRef<{
+      renderKind: RenderPagesUpdateKind;
+      ratio: number;
+      /** Incremental only: scrollTop after paint — use in layout effect so a late `scrollHeight` bump from React does not rescale via `ratio * max` (jumps ~hundreds of px). */
+      scrollTopSnapshot: number | null;
+      domAnchorPmStart: number | null;
+      domAnchorOffsetInScroller: number;
+    } | null>(null);
+    /** When step 4 last wrote an incremental `scrollTopSnapshot` (for start-of-pipeline drift fix). */
+    const pendingIncrementalScrollSnapshotWrittenAtRef = useRef(0);
     const hiddenPMRef = useRef<HiddenProseMirrorRef>(null);
     const painterRef = useRef<LayoutPainter | null>(null);
 
@@ -1820,6 +1839,29 @@ const PagedEditorComponent = forwardRef<PagedEditorRef, PagedEditorProps>(
 
         // Signal layout is starting
         syncCoordinator.onLayoutStart();
+
+        /** When two layout passes run before React commits, step 4 of the second pass clears
+         * `pendingScrollRestoreRef` before useLayoutEffect — scroll can drift in between
+         * (anchoring / host callbacks) and get cemented into the wrong snapshot.
+         * `onlyIfSnapshotJustWritten`: do not run after the user has scrolled (e.g. arrow/caret
+         * paths that bump layout) — that would snap back to an old snapshot. */
+        const applyPendingIncrementalScrollSnapshot = (onlyIfSnapshotJustWritten: boolean) => {
+          const pend = pendingScrollRestoreRef.current;
+          if (pend?.renderKind !== 'incremental' || pend.scrollTopSnapshot == null) return;
+          if (onlyIfSnapshotJustWritten) {
+            const age = performance.now() - pendingIncrementalScrollSnapshotWrittenAtRef.current;
+            if (age > 32) return;
+          }
+          const pe0 = pagesContainerRef.current;
+          const sp0 = pe0 ? (getScrollContainer() ?? findVerticalScrollParentOrRoot(pe0)) : null;
+          if (!sp0?.isConnected) return;
+          const max0 = Math.max(1, sp0.scrollHeight - sp0.clientHeight);
+          const target = Math.min(Math.max(0, pend.scrollTopSnapshot), max0);
+          if (Math.abs(sp0.scrollTop - target) > 0.5) {
+            sp0.scrollTop = target;
+          }
+        };
+        applyPendingIncrementalScrollSnapshot(true);
 
         try {
           // Step 1: Convert PM doc to flow blocks
@@ -1992,6 +2034,38 @@ const PagedEditorComponent = forwardRef<PagedEditorRef, PagedEditorProps>(
           // Step 4: Paint to DOM
           if (pagesContainerRef.current && painterRef.current) {
             stepStart = performance.now();
+            pendingScrollRestoreRef.current = null;
+            pendingIncrementalScrollSnapshotWrittenAtRef.current = 0;
+
+            const pagesEl = pagesContainerRef.current;
+            const scrollParent = getScrollContainer() ?? findVerticalScrollParentOrRoot(pagesEl);
+            // Full `renderPages` rebuild clears `innerHTML` — preserve viewport via ratio or
+            // DOM anchor (see `pendingScrollRestoreRef` + useLayoutEffect after React commit).
+            // Pre-render ratio is required for full-rebuild (scroll may reset mid-paint). For
+            // incremental paint, the browser may adjust scrollTop during `renderPages` (e.g.
+            // after revision jump + smooth scroll); re-read ratio after paint (below).
+            let scrollRestoreRatioPre = 0;
+            let domAnchorPmStart: number | null = null;
+            let domAnchorOffsetInScroller = 0;
+            if (scrollParent?.isConnected) {
+              const maxBefore = Math.max(1, scrollParent.scrollHeight - scrollParent.clientHeight);
+              scrollRestoreRatioPre = scrollParent.scrollTop / maxBefore;
+
+              const head = state.selection.head;
+              domAnchorPmStart = findPaintedPmStartAtOrBefore(pagesEl, head);
+              if (domAnchorPmStart != null) {
+                const anchorEl = pagesEl.querySelector<HTMLElement>(
+                  `[data-pm-start="${domAnchorPmStart}"]`
+                );
+                if (anchorEl) {
+                  const ar = anchorEl.getBoundingClientRect();
+                  const sr = scrollParent.getBoundingClientRect();
+                  domAnchorOffsetInScroller = ar.top - sr.top;
+                } else {
+                  domAnchorPmStart = null;
+                }
+              }
+            }
 
             // Build block lookup
             const blockLookup: BlockLookup = new Map();
@@ -2010,10 +2084,14 @@ const PagedEditorComponent = forwardRef<PagedEditorRef, PagedEditorProps>(
               : undefined;
 
             // Render pages to container
-            renderPages(newLayout.pages, pagesContainerRef.current, {
+            const renderPagesKind = renderPages(newLayout.pages, pagesEl, {
               pageGap,
               showShadow: true,
               pageBackground: '#fff',
+              pageIntersectionRoot:
+                scrollParent?.isConnected && scrollParent instanceof HTMLElement
+                  ? scrollParent
+                  : undefined,
               blockLookup,
               headerContent: headerContentForRender,
               footerContent: footerContentForRender,
@@ -2036,6 +2114,40 @@ const PagedEditorComponent = forwardRef<PagedEditorRef, PagedEditorProps>(
               footnotesByPage?: Map<number, FootnoteRenderItem[]>;
             });
 
+            // `totalHeight` / marginBottom on this node still reflect the *previous* React commit
+            // until the next paint — that changes `scrollHeight` after `renderPages` and makes
+            // scroll restoration wrong. Apply the same chrome synchronously from `newLayout`.
+            const vp = viewportLayoutRef.current;
+            if (vp) {
+              const mh = viewportMinHeightPx(newLayout, pageSize.h, pageGap);
+              vp.style.minHeight = `${mh}px`;
+              if (zoom !== 1) {
+                vp.style.marginBottom = `${mh * (zoom - 1)}px`;
+              } else {
+                vp.style.marginBottom = '';
+              }
+            }
+
+            if (scrollParent?.isConnected) {
+              let ratioForRestore = scrollRestoreRatioPre;
+              if (renderPagesKind === 'incremental') {
+                const maxPost = Math.max(1, scrollParent.scrollHeight - scrollParent.clientHeight);
+                ratioForRestore = scrollParent.scrollTop / maxPost;
+              }
+              const scrollTopSnapshot =
+                renderPagesKind === 'incremental' ? scrollParent.scrollTop : null;
+              pendingScrollRestoreRef.current = {
+                renderKind: renderPagesKind,
+                ratio: ratioForRestore,
+                scrollTopSnapshot,
+                domAnchorPmStart,
+                domAnchorOffsetInScroller,
+              };
+              if (renderPagesKind === 'incremental' && scrollTopSnapshot != null) {
+                pendingIncrementalScrollSnapshotWrittenAtRef.current = performance.now();
+              }
+            }
+
             stepTime = performance.now() - stepStart;
             if (stepTime > 500) {
               console.warn(`[PagedEditor] renderPages took ${Math.round(stepTime)}ms`);
@@ -2046,6 +2158,9 @@ const PagedEditorComponent = forwardRef<PagedEditorRef, PagedEditorProps>(
               const domContext = createRenderedDomContext(pagesContainerRef.current, zoom);
               onRenderedDomContextReady(domContext);
             }
+          } else {
+            pendingScrollRestoreRef.current = null;
+            pendingIncrementalScrollSnapshotWrittenAtRef.current = 0;
           }
 
           // Compute anchor Y positions for comments sidebar (works without DOM queries).
@@ -2061,6 +2176,8 @@ const PagedEditorComponent = forwardRef<PagedEditorRef, PagedEditorProps>(
             onAnchorPositionsChange(positions);
           }
 
+          applyPendingIncrementalScrollSnapshot(false);
+
           const totalTime = performance.now() - pipelineStart;
           if (totalTime > 2000) {
             console.warn(
@@ -2074,6 +2191,7 @@ const PagedEditorComponent = forwardRef<PagedEditorRef, PagedEditorProps>(
 
         // Signal layout is complete for this sequence
         syncCoordinator.onLayoutComplete(currentEpoch);
+        applyPendingIncrementalScrollSnapshot(false);
       },
       [
         contentWidth,
@@ -2091,8 +2209,59 @@ const PagedEditorComponent = forwardRef<PagedEditorRef, PagedEditorProps>(
         onRenderedDomContextReady,
         document,
         resolvedCommentIds,
+        getScrollContainer,
       ]
     );
+
+    // After `setLayout`, React still has to commit `totalHeight` / margin on the viewport.
+    // Restoring scroll in the pipeline often used a stale `scrollHeight`; doing it here
+    // (plus one rAF) matches the committed DOM.
+    useLayoutEffect(() => {
+      const pending = pendingScrollRestoreRef.current;
+      if (!pending) return;
+      pendingScrollRestoreRef.current = null;
+      pendingIncrementalScrollSnapshotWrittenAtRef.current = 0;
+
+      const pagesEl = pagesContainerRef.current;
+      const scrollParent =
+        getScrollContainer() ?? (pagesEl ? findVerticalScrollParentOrRoot(pagesEl) : null);
+      if (!pagesEl || !scrollParent?.isConnected) return;
+
+      const { renderKind, ratio, scrollTopSnapshot, domAnchorPmStart, domAnchorOffsetInScroller } =
+        pending;
+
+      const applyRatio = () => {
+        const maxAfter = Math.max(1, scrollParent.scrollHeight - scrollParent.clientHeight);
+        scrollParent.scrollTop = ratio * maxAfter;
+      };
+
+      /** Incremental: keep absolute scroll offset; avoids `ratio * newMax` when React grows `scrollHeight` after commit. */
+      const applyIncrementalSnapshot = (): boolean => {
+        if (renderKind !== 'incremental' || scrollTopSnapshot == null) return false;
+        const maxAfter = Math.max(1, scrollParent.scrollHeight - scrollParent.clientHeight);
+        scrollParent.scrollTop = Math.min(Math.max(0, scrollTopSnapshot), maxAfter);
+        return true;
+      };
+
+      const applyScrollRestore = () => {
+        if (applyIncrementalSnapshot()) return;
+        if (renderKind !== 'incremental' && domAnchorPmStart != null) {
+          const el2 = pagesEl.querySelector<HTMLElement>(`[data-pm-start="${domAnchorPmStart}"]`);
+          if (el2) {
+            const sr = scrollParent.getBoundingClientRect();
+            const newOffset = el2.getBoundingClientRect().top - sr.top;
+            scrollParent.scrollTop += domAnchorOffsetInScroller - newOffset;
+            return;
+          }
+        }
+        applyRatio();
+      };
+
+      applyScrollRestore();
+      requestAnimationFrame(() => {
+        applyScrollRestore();
+      });
+    }, [layout, getScrollContainer]);
 
     // =========================================================================
     // Coalesced Layout (rAF throttle)
@@ -2719,15 +2888,15 @@ const PagedEditorComponent = forwardRef<PagedEditorRef, PagedEditorProps>(
 
         const scroller = getScrollContainer() ?? findVerticalScrollParentOrRoot(pages);
 
-        const scrollPaintedTarget = (hybrid: boolean): boolean => {
+        /** Always instant: smooth scroll here can still run when the user types (revision / para jump). */
+        const scrollPaintedTargetInstant = (): boolean => {
           const targetEl = queryPaintedStartEl();
           if (!targetEl) return false;
-          const useSmooth = hybrid && !isScrollTargetFar(targetEl, scroller);
-          scrollElementCenterIntoContainer(targetEl, scroller, useSmooth ? 'smooth' : 'instant');
+          scrollElementCenterIntoContainer(targetEl, scroller, 'instant');
           return true;
         };
 
-        if (scrollPaintedTarget(true)) return;
+        if (scrollPaintedTargetInstant()) return;
 
         const lay = layout;
         const blk = blocks;
@@ -2747,7 +2916,8 @@ const PagedEditorComponent = forwardRef<PagedEditorRef, PagedEditorProps>(
         const shell = pageShells[pageIndex] as HTMLElement | undefined;
         if (!shell) return;
 
-        // Long jump / virtualization: snap shell first; smooth center once content exists.
+        // Long jump / virtualization: snap shell first; center once content exists (instant
+        // here — same rationale as `scrollPaintedTarget(false)` above).
         scrollElementCenterIntoContainer(shell, scroller, 'instant');
 
         requestAnimationFrame(() => {
@@ -2755,9 +2925,9 @@ const PagedEditorComponent = forwardRef<PagedEditorRef, PagedEditorProps>(
             requestAnimationFrame(() => {
               const painted = queryPaintedStartEl();
               if (painted) {
-                scrollElementCenterIntoContainer(painted, scroller, 'smooth');
+                scrollElementCenterIntoContainer(painted, scroller, 'instant');
               } else {
-                scrollPaintedTarget(false);
+                scrollPaintedTargetInstant();
               }
             });
           });
@@ -2768,14 +2938,41 @@ const PagedEditorComponent = forwardRef<PagedEditorRef, PagedEditorProps>(
 
     const scrollToParaIdImpl = useCallback(
       (paraId: string): boolean => {
-        const state = hiddenPMRef.current?.getState();
+        if (!hiddenPMRef.current) return false;
+        const state = hiddenPMRef.current.getState();
         if (!state) return false;
         const startPos = findStartPosForParaId(state.doc, paraId);
         if (startPos == null) return false;
+        // Scroll using block open: `[data-pm-start="${pmPos}"]` matches paragraph starts, not
+        // arbitrary in-block positions — end-of-para often misses and shell fallback
+        // under-centers (especially last page).
         scrollToPositionImpl(startPos, true);
-        const inner = Math.min(startPos + 1, state.doc.content.size);
-        hiddenPMRef.current?.setSelection(inner);
-        hiddenPMRef.current?.focus();
+
+        /** Re-apply caret after scroll/layout: sync scroll + focus can leave PM selection at doc start. */
+        const applyParaIdCaret = (): boolean => {
+          const pm = hiddenPMRef.current;
+          if (!pm) return false;
+          const s = pm.getState();
+          if (!s) return false;
+          const sp = findStartPosForParaId(s.doc, paraId);
+          if (sp == null) return false;
+          const inner = findEndPosForParaId(s.doc, paraId) ?? Math.min(sp + 1, s.doc.content.size);
+          pm.setSelection(inner);
+          pm.focus();
+          return true;
+        };
+
+        applyParaIdCaret();
+        // Match `scrollToPositionImpl(..., true)` triple-rAF scroll tuning so selection wins last.
+        requestAnimationFrame(() => {
+          applyParaIdCaret();
+          requestAnimationFrame(() => {
+            applyParaIdCaret();
+            requestAnimationFrame(() => {
+              applyParaIdCaret();
+            });
+          });
+        });
         return true;
       },
       [scrollToPositionImpl]
@@ -3905,13 +4102,17 @@ const PagedEditorComponent = forwardRef<PagedEditorRef, PagedEditorProps>(
         // Cmd/Ctrl+Home - scroll to top and move cursor to start
         if (e.key === 'Home' && (e.metaKey || e.ctrlKey)) {
           const sc = getScrollContainer();
-          if (sc) sc.scrollTop = 0;
+          if (sc) {
+            sc.scrollTop = 0;
+          }
         }
 
         // Cmd/Ctrl+End - scroll to bottom and move cursor to end
         if (e.key === 'End' && (e.metaKey || e.ctrlKey)) {
           const sc = getScrollContainer();
-          if (sc) sc.scrollTop = sc.scrollHeight;
+          if (sc) {
+            sc.scrollTop = sc.scrollHeight;
+          }
         }
       },
       [readOnly, getScrollContainer]
@@ -4023,7 +4224,7 @@ const PagedEditorComponent = forwardRef<PagedEditorRef, PagedEditorProps>(
 
       observer.observe(container);
       return () => observer.disconnect();
-    }, [updateSelectionOverlay]);
+    }, [updateSelectionOverlay, getScrollContainer]);
 
     // =========================================================================
     // Imperative Handle
@@ -4132,8 +4333,7 @@ const PagedEditorComponent = forwardRef<PagedEditorRef, PagedEditorProps>(
     // Calculate total height for scroll
     const totalHeight = useMemo(() => {
       if (!layout) return DEFAULT_PAGE_HEIGHT + 48;
-      const numPages = layout.pages.length;
-      return numPages * pageSize.h + (numPages - 1) * pageGap + 48;
+      return viewportMinHeightPx(layout, pageSize.h, pageGap);
     }, [layout, pageSize.h, pageGap]);
 
     return (
@@ -4147,23 +4347,46 @@ const PagedEditorComponent = forwardRef<PagedEditorRef, PagedEditorProps>(
         onKeyDown={handleKeyDown}
         onMouseDown={handleContainerMouseDown}
       >
-        {/* Hidden ProseMirror for keyboard input */}
-        <HiddenProseMirror
-          ref={hiddenPMRef}
-          document={document}
-          styles={styles}
-          widthPx={contentWidth}
-          readOnly={readOnly}
-          onTransaction={handleTransaction}
-          onSelectionChange={handleSelectionChange}
-          externalPlugins={externalPlugins}
-          extensionManager={extensionManager}
-          onEditorViewReady={handleEditorViewReady}
-          onKeyDown={handlePMKeyDown}
-        />
+        {/* Hidden PM is portaled to document.body so it is not a descendant of the
+            editor's overflow:auto scroll container. Otherwise ArrowLeft/ArrowRight often
+            take the browser default path (no preventDefault) and the UA scrolls that
+            ancestor to "show" the hidden contenteditable — large scrollTop jumps. */}
+        {typeof globalThis.document !== 'undefined' ? (
+          createPortal(
+            <HiddenProseMirror
+              ref={hiddenPMRef}
+              document={document}
+              styles={styles}
+              widthPx={contentWidth}
+              readOnly={readOnly}
+              onTransaction={handleTransaction}
+              onSelectionChange={handleSelectionChange}
+              externalPlugins={externalPlugins}
+              extensionManager={extensionManager}
+              onEditorViewReady={handleEditorViewReady}
+              onKeyDown={handlePMKeyDown}
+            />,
+            globalThis.document.body
+          )
+        ) : (
+          <HiddenProseMirror
+            ref={hiddenPMRef}
+            document={document}
+            styles={styles}
+            widthPx={contentWidth}
+            readOnly={readOnly}
+            onTransaction={handleTransaction}
+            onSelectionChange={handleSelectionChange}
+            externalPlugins={externalPlugins}
+            extensionManager={extensionManager}
+            onEditorViewReady={handleEditorViewReady}
+            onKeyDown={handlePMKeyDown}
+          />
+        )}
 
         {/* Viewport for visible pages */}
         <div
+          ref={viewportLayoutRef}
           style={{
             ...viewportStyles,
             minHeight: totalHeight,

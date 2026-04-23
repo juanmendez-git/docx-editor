@@ -189,6 +189,12 @@ export interface RenderPageOptions {
   footnoteArea?: FootnoteRenderItem[];
   /** Comment IDs that are resolved — skip highlight for these */
   resolvedCommentIds?: Set<number>;
+  /**
+   * Scrolling ancestor of the page `container` (e.g. the editor’s `overflow: auto` panel).
+   * When set, virtualization uses it as `IntersectionObserver` root and for the depopulation
+   * sweep; otherwise the viewport is used. Omit when the document scrolls with the window.
+   */
+  pageIntersectionRoot?: Element | null;
 }
 
 interface HeaderFooterLayoutInfo {
@@ -1262,6 +1268,8 @@ interface PageContainerState {
   pageStates: PageShellState[];
   totalPages: number;
   optionsHash: string;
+  /** Same reference passed as `pageIntersectionRoot` when the observer was created. */
+  intersectionRoot: Element | null;
   pageDataMap: Map<HTMLElement, { page: Page; index: number; rendered: boolean }>;
   /** Current render options — kept up-to-date so the observer closure always reads fresh values. */
   currentOptions: FullPageOptions;
@@ -1378,22 +1386,66 @@ function applyContainerStyles(container: HTMLElement, pageGap: number): void {
 const VIRTUALIZATION_BUFFER = 2;
 
 /**
- * Minimum page count before virtualization kicks in.
- * Small documents render all pages eagerly for simplicity.
+ * When true, the IntersectionObserver callback depopulates page shells far from the
+ * visible band. That sweep uses geometry that shifts during incremental reflow while
+ * typing; clearing a shell (`innerHTML = ''`) changes `scrollHeight` and causes visible
+ * scroll jumps in nested editors. Population-only keeps memory higher but avoids that.
+ * Re-enable if we add scroll-idle / debounced depopulate.
  */
-const VIRTUALIZATION_THRESHOLD = 8;
+const RUN_VIRTUALIZATION_DEPOPULATE_SWEEP = false;
 
 /**
- * Render multiple pages to a container with virtualization for large documents.
+ * Minimum page count before virtualization kicks in.
+ * Use `0` so every layout run can use the incremental path: non-virtualized docs
+ * previously cleared `container.innerHTML` on each `renderPages`, which reset
+ * scroll and fought caret restoration while typing.
+ */
+const VIRTUALIZATION_THRESHOLD = 0;
+
+/** Pages to keep rendered: those overlapping an expanded vertical band around the IO root. */
+function nearRenderedPageIndicesForVirtualizationSweep(
+  liveDataMap: Map<HTMLElement, { page: Page; index: number; rendered: boolean }>,
+  intersectionRoot: Element | null
+): Set<number> {
+  const nearIndices = new Set<number>();
+  let rootTop: number;
+  let rootBottom: number;
+  let band: number;
+  if (intersectionRoot instanceof HTMLElement) {
+    const rr = intersectionRoot.getBoundingClientRect();
+    rootTop = rr.top;
+    rootBottom = rr.bottom;
+    band = Math.max(1, intersectionRoot.clientHeight) * 3;
+  } else {
+    rootTop = 0;
+    rootBottom = window.innerHeight;
+    band = window.innerHeight * 3;
+  }
+  for (const [el, data] of liveDataMap) {
+    if (!data.rendered) continue;
+    const rect = el.getBoundingClientRect();
+    if (rect.bottom > rootTop - band && rect.top < rootBottom + band) {
+      nearIndices.add(data.index);
+    }
+  }
+  return nearIndices;
+}
+
+/**
+ * Render multiple pages to a container with virtualization.
  *
- * For documents with fewer than VIRTUALIZATION_THRESHOLD pages, all pages
- * are rendered eagerly. For larger documents, only pages near the visible
- * viewport are fully rendered — off-screen pages are lightweight shells
- * with correct dimensions to preserve scroll position.
+ * Page shells always exist for every page; only pages near the visible viewport
+ * are fully rendered — off-screen pages are lightweight shells with correct
+ * dimensions to preserve scroll position.
  *
  * An IntersectionObserver watches page elements and populates/clears
  * content as pages scroll into and out of view.
+ *
+ * @returns whether this call cleared/rebuilt the container (`full-rebuild`) or only
+ *   patched existing shells (`incremental`).
  */
+export type RenderPagesUpdateKind = 'incremental' | 'full-rebuild';
+
 export function renderPages(
   pages: Page[],
   container: HTMLElement,
@@ -1401,17 +1453,24 @@ export function renderPages(
     pageGap?: number;
     footnotesByPage?: Map<number, FootnoteRenderItem[]>;
   } = {}
-): void {
+): RenderPagesUpdateKind {
   const totalPages = pages.length;
   const pageGap = options.pageGap ?? 24;
   const pc = container as PageContainer;
   const prevState = pc.__pageRenderState;
   const currentOptionsHash = computeOptionsHash(options);
   const useVirtualization = totalPages >= VIRTUALIZATION_THRESHOLD;
+  const nextIoRoot =
+    options.pageIntersectionRoot !== undefined && options.pageIntersectionRoot !== null
+      ? options.pageIntersectionRoot
+      : null;
 
-  // Determine if we can do an incremental update
+  // Determine if we can do an incremental update (IO root must match — observer is tied to it).
   const canIncremental =
-    prevState && prevState.optionsHash === currentOptionsHash && useVirtualization;
+    !!prevState &&
+    prevState.optionsHash === currentOptionsHash &&
+    useVirtualization &&
+    prevState.intersectionRoot === nextIoRoot;
 
   if (canIncremental) {
     // --- INCREMENTAL UPDATE PATH ---
@@ -1513,7 +1572,7 @@ export function renderPages(
     prevState.totalPages = totalPages;
     prevState.currentOptions = options;
 
-    return;
+    return 'incremental';
   }
 
   // --- FULL REBUILD PATH ---
@@ -1561,7 +1620,7 @@ export function renderPages(
   if (!useVirtualization) {
     // Store state for potential future incremental updates (won't be used
     // since small docs skip the incremental path, but keeps data consistent)
-    return;
+    return 'full-rebuild';
   }
 
   // --- Virtualization via IntersectionObserver ---
@@ -1572,7 +1631,7 @@ export function renderPages(
     pageDataMap.set(pageShells[i], { page: pages[i], index: i, rendered: false });
   }
 
-  // Use the browser viewport as intersection root.
+  // Intersection root: optional real scroll parent (nested editor); else viewport.
   // The observer reads from pc.__pageRenderState so it always uses
   // the latest options/totalPages (updated by the incremental path).
   const observer = new IntersectionObserver(
@@ -1613,35 +1672,30 @@ export function renderPages(
         }
       }
 
-      // Sweep: depopulate pages far from any currently-visible page.
-      const viewportHeight = window.innerHeight;
-      const nearThreshold = viewportHeight * 3;
-      const nearIndices = new Set<number>();
+      if (RUN_VIRTUALIZATION_DEPOPULATE_SWEEP) {
+        // Sweep: depopulate pages far from any page near the IO root (viewport or scroll panel).
+        const nearIndices = nearRenderedPageIndicesForVirtualizationSweep(
+          liveDataMap,
+          renderState.intersectionRoot
+        );
 
-      for (const [el, data] of liveDataMap) {
-        if (!data.rendered) continue;
-        const rect = el.getBoundingClientRect();
-        if (rect.bottom > -nearThreshold && rect.top < viewportHeight + nearThreshold) {
-          nearIndices.add(data.index);
-        }
-      }
-
-      for (const [el, data] of liveDataMap) {
-        if (!data.rendered) continue;
-        let keepRendered = false;
-        for (const nearIdx of nearIndices) {
-          if (Math.abs(data.index - nearIdx) <= VIRTUALIZATION_BUFFER + 1) {
-            keepRendered = true;
-            break;
+        for (const [el, data] of liveDataMap) {
+          if (!data.rendered) continue;
+          let keepRendered = false;
+          for (const nearIdx of nearIndices) {
+            if (Math.abs(data.index - nearIdx) <= VIRTUALIZATION_BUFFER + 1) {
+              keepRendered = true;
+              break;
+            }
           }
-        }
-        if (!keepRendered && nearIndices.size > 0) {
-          depopulatePageShell(el, liveDataMap);
+          if (!keepRendered && nearIndices.size > 0) {
+            depopulatePageShell(el, liveDataMap);
+          }
         }
       }
     },
     {
-      root: null,
+      root: nextIoRoot instanceof HTMLElement ? nextIoRoot : null,
       rootMargin: '1500px 0px 1500px 0px',
     }
   );
@@ -1658,6 +1712,7 @@ export function renderPages(
     pageStates: pageShells.map((el, i) => ({ element: el, fingerprint: fingerprints[i] })),
     totalPages,
     optionsHash: currentOptionsHash,
+    intersectionRoot: nextIoRoot,
     pageDataMap,
     currentOptions: options,
   };
@@ -1667,6 +1722,8 @@ export function renderPages(
   for (let i = 0; i < initialRenderCount; i++) {
     populatePageShell(pageShells[i], pageDataMap, totalPages, options);
   }
+
+  return 'full-rebuild';
 }
 
 /**

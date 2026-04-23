@@ -4,7 +4,8 @@
 
 import { describe, test, expect } from 'bun:test';
 import { Schema } from 'prosemirror-model';
-import { findStartPosForParaId } from './findStartPosForParaId';
+import { TextSelection } from 'prosemirror-state';
+import { findEndPosForParaId, findStartPosForParaId } from './findStartPosForParaId';
 
 const schema = new Schema({
   nodes: {
@@ -57,14 +58,46 @@ describe('findStartPosForParaId', () => {
     expect(first).toBe(0);
   });
 
-  test('paraId match is strict (case-sensitive)', () => {
+  test('paraId match is trim + case-insensitive', () => {
     const doc = docFromParas({ text: 'x', paraId: 'Ab12' });
-    expect(findStartPosForParaId(doc, 'ab12')).toBeNull();
+    expect(findStartPosForParaId(doc, 'ab12')).toBe(0);
+    expect(findStartPosForParaId(doc, '  Ab12  ')).toBe(0);
     expect(findStartPosForParaId(doc, 'Ab12')).toBe(0);
   });
 
   test('finds paragraph with empty text', () => {
     const doc = docFromParas({ text: '', paraId: 'EMPTY' });
     expect(findStartPosForParaId(doc, 'EMPTY')).toBe(0);
+  });
+});
+
+describe('findEndPosForParaId', () => {
+  test('returns null when paragraph is missing', () => {
+    const doc = docFromParas({ text: 'A', paraId: 'P1' });
+    expect(findEndPosForParaId(doc, 'MISSING')).toBeNull();
+  });
+
+  test('collapsed selection at end is valid (non-empty)', () => {
+    const doc = docFromParas({ text: 'Hi', paraId: 'P1' });
+    const end = findEndPosForParaId(doc, 'P1');
+    expect(end).not.toBeNull();
+    expect(() => TextSelection.create(doc, end!, end!)).not.toThrow();
+    const start = findStartPosForParaId(doc, 'P1')!;
+    expect(end! > start).toBe(true);
+  });
+
+  test('empty paragraph: end is inside block', () => {
+    const doc = docFromParas({ text: '', paraId: 'EMPTY' });
+    const start = findStartPosForParaId(doc, 'EMPTY');
+    const end = findEndPosForParaId(doc, 'EMPTY');
+    expect(start).toBe(0);
+    expect(end).toBe(1);
+    expect(() => TextSelection.create(doc, end!, end!)).not.toThrow();
+  });
+
+  test('paraId match is case-insensitive like findStart', () => {
+    const doc = docFromParas({ text: 'x', paraId: 'Ab12' });
+    const end = findEndPosForParaId(doc, 'ab12');
+    expect(end).not.toBeNull();
   });
 });

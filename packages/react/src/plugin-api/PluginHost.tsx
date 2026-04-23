@@ -50,6 +50,7 @@ const PLUGIN_HOST_STYLES = `
   display: flex;
   width: 100%;
   height: 100%;
+  min-height: 0;
   overflow: visible;
   position: relative;
 }
@@ -59,6 +60,7 @@ const PLUGIN_HOST_STYLES = `
   display: flex;
   flex-direction: column;
   min-width: 0;
+  min-height: 0;
   overflow: visible;
 }
 

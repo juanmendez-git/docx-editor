@@ -75,7 +75,6 @@ import {
   InlineHeaderFooterEditor,
   type InlineHeaderFooterEditorRef,
 } from './InlineHeaderFooterEditor';
-
 // Dialog components (lazy-loaded — only fetched when first opened)
 const FindReplaceDialog = lazy(() => import('./dialogs/FindReplaceDialog'));
 const HyperlinkDialog = lazy(() => import('./dialogs/HyperlinkDialog'));

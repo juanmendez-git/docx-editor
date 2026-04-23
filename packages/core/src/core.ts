@@ -127,7 +127,10 @@ export {
 
 export { type DocxInput, toArrayBuffer } from './utils/docxInput';
 
-export { findStartPosForParaId } from './prosemirror/utils/findStartPosForParaId';
+export {
+  findEndPosForParaId,
+  findStartPosForParaId,
+} from './prosemirror/utils/findStartPosForParaId';
 
 // ============================================================================
 // FONT LOADER
