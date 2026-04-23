@@ -25,7 +25,7 @@
     "vue": "^3.0.0"
   },
   "dependencies": {
-    "@eigenpal/docx-core": "file:../core"
+    "@eigenpal/docx-core": "workspace:*"
   },
   "keywords": [
     "docx",
