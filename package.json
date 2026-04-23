@@ -3,9 +3,7 @@
   "version": "0.0.21",
   "private": true,
   "workspaces": [
-    "packages/*",
-    "examples/vue",
-    "examples/agent-use-demo"
+    "packages/*"
   ],
   "type": "module",
   "scripts": {
