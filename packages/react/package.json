@@ -92,7 +92,6 @@
     }
   },
   "dependencies": {
-    "@eigenpal/docx-core": "^0.0.28",
     "@radix-ui/react-select": "^2.2.6",
     "clsx": "^2.1.0",
     "prosemirror-commands": "^1.5.2",

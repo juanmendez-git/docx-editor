@@ -84,7 +84,7 @@ CLAUDE DESKTOP CONFIGURATION:
     "mcpServers": {
       "docx-editor": {
         "command": "npx",
-            "args": ["-y", "@eigenpal/docx-js-editor", "--mcp"]
+        "args": ["-y", "@eigenpal/docx-core", "docx-editor-mcp"]
       }
     }
   }

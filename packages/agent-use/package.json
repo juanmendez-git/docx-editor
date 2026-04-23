@@ -33,7 +33,6 @@
     "typecheck": "tsc --noEmit"
   },
   "dependencies": {
-    "@eigenpal/docx-core": "^0.0.28",
     "docxtemplater": "^3.50.0",
     "jszip": "^3.10.1",
     "pizzip": "^3.1.7",
