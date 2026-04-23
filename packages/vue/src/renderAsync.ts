@@ -5,7 +5,7 @@
  * A Vue contributor can implement this using `createApp().mount()`.
  */
 
-import type { EditorHandle } from '@juanmendez90/docx-core';
+import type { EditorHandle } from '@eigenpal/docx-core';
 
 /** Options for the Vue renderAsync (to be defined by implementor). */
 export interface VueRenderAsyncOptions {
@@ -27,7 +27,7 @@ export function renderAsync(
   _options: VueRenderAsyncOptions = {}
 ): Promise<EditorHandle> {
   throw new Error(
-    '@juanmendez90/docx-editor-vue renderAsync is not yet implemented. ' +
+    '@eigenpal/docx-editor-vue renderAsync is not yet implemented. ' +
       'Community contributions welcome!'
   );
 }

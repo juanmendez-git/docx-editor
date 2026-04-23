@@ -1,4 +1,4 @@
-# @juanmendez90/docx-editor-agents
+# @eigenpal/docx-editor-agents
 
 [![License: AGPL-3.0](https://img.shields.io/badge/License-AGPL--3.0-blue.svg)](./LICENSE)
 
@@ -7,13 +7,13 @@ Word-like API for AI document review. Add comments, suggest replacements, accept
 ## Install
 
 ```bash
-npm install @juanmendez90/docx-editor-agents
+npm install @eigenpal/docx-editor-agents
 ```
 
 ## Usage
 
 ```ts
-import { DocxReviewer } from '@juanmendez90/docx-editor-agents';
+import { DocxReviewer } from '@eigenpal/docx-editor-agents';
 
 const reviewer = await DocxReviewer.fromBuffer(buffer, 'AI Reviewer');
 

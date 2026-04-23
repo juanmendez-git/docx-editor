@@ -19,8 +19,8 @@ import type {
   Paragraph,
   Table,
   SectionProperties,
-} from '@juanmendez90/docx-core/types/document';
-import { twipsToPixels, formatPx } from '@juanmendez90/docx-core/utils/units';
+} from '@eigenpal/docx-core/types/document';
+import { twipsToPixels, formatPx } from '@eigenpal/docx-core/utils/units';
 
 // ============================================================================
 // TYPES

@@ -10,25 +10,25 @@ export default defineConfig({
   resolve: {
     alias: [
       {
-        find: '@juanmendez90/docx-editor-vue',
+        find: '@eigenpal/docx-editor-vue',
         replacement: path.join(monorepoRoot, 'packages/vue/src/index.ts'),
       },
       {
-        find: '@juanmendez90/docx-core/headless',
+        find: '@eigenpal/docx-core/headless',
         replacement: path.join(monorepoRoot, 'packages/core/src/headless.ts'),
       },
       {
-        find: '@juanmendez90/docx-core/core-plugins',
+        find: '@eigenpal/docx-core/core-plugins',
         replacement: path.join(monorepoRoot, 'packages/core/src/core-plugins/index.ts'),
       },
       // Wildcard alias for deep core imports
       {
-        find: /^@juanmendez90\/docx-core\/(.+)/,
+        find: /^@eigenpal\/docx-core\/(.+)/,
         replacement: path.join(monorepoRoot, 'packages/core/src/$1'),
       },
-      // Exact match for bare @juanmendez90/docx-core (must come AFTER prefix match)
+      // Exact match for bare @eigenpal/docx-core (must come AFTER prefix match)
       {
-        find: /^@juanmendez90\/docx-core$/,
+        find: /^@eigenpal\/docx-core$/,
         replacement: path.join(monorepoRoot, 'packages/core/src/core.ts'),
       },
     ],

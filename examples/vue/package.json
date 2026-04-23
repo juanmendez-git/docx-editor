@@ -8,8 +8,8 @@
     "preview": "vite preview"
   },
   "dependencies": {
-    "@juanmendez90/docx-editor-vue": "workspace:*",
-    "@juanmendez90/docx-core": "workspace:*",
+    "@eigenpal/docx-editor-vue": "workspace:*",
+    "@eigenpal/docx-core": "file:../../packages/core",
     "vue": "^3.5.0"
   },
   "devDependencies": {

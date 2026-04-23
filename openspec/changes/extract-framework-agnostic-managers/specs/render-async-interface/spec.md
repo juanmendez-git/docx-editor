@@ -2,7 +2,7 @@
 
 ### Requirement: EditorHandle interface in core
 
-The `@juanmendez90/docx-core` package SHALL export an `EditorHandle` interface defining the contract for an imperatively mounted editor instance.
+The `@eigenpal/docx-core` package SHALL export an `EditorHandle` interface defining the contract for an imperatively mounted editor instance.
 
 #### Scenario: EditorHandle provides document operations
 
@@ -16,7 +16,7 @@ The `@juanmendez90/docx-core` package SHALL export an `EditorHandle` interface d
 
 ### Requirement: React renderAsync implements EditorHandle
 
-The `@juanmendez90/docx-js-editor` package SHALL export a `renderAsync(input, container, options): Promise<EditorHandle>` function that mounts a React editor into a DOM element.
+The `@eigenpal/docx-js-editor` package SHALL export a `renderAsync(input, container, options): Promise<EditorHandle>` function that mounts a React editor into a DOM element.
 
 #### Scenario: Mount editor imperatively with React
 
@@ -31,10 +31,10 @@ The `@juanmendez90/docx-js-editor` package SHALL export a `renderAsync(input, co
 
 ### Requirement: Vue renderAsync scaffolded
 
-The `@juanmendez90/docx-editor-vue` package SHALL scaffold a `renderAsync(input, container, options): Promise<EditorHandle>` function signature using `Vue.createApp().mount()`.
+The `@eigenpal/docx-editor-vue` package SHALL scaffold a `renderAsync(input, container, options): Promise<EditorHandle>` function signature using `Vue.createApp().mount()`.
 
 #### Scenario: Vue renderAsync placeholder exists
 
-- **WHEN** inspecting `@juanmendez90/docx-editor-vue` exports
+- **WHEN** inspecting `@eigenpal/docx-editor-vue` exports
 - **THEN** a `renderAsync` function type or stub SHALL exist
-- **AND** it SHALL return `Promise<EditorHandle>` from `@juanmendez90/docx-core`
+- **AND** it SHALL return `Promise<EditorHandle>` from `@eigenpal/docx-core`

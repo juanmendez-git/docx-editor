@@ -14,11 +14,7 @@
 
 import React from 'react';
 import type { CSSProperties, ReactNode } from 'react';
-import type {
-  TextBox as TextBoxType,
-  Paragraph,
-  Table,
-} from '@juanmendez90/docx-core/types/document';
+import type { TextBox as TextBoxType, Paragraph, Table } from '@eigenpal/docx-core/types/document';
 import {
   getTextBoxDimensionsPx,
   getTextBoxWidthPx,
@@ -31,8 +27,8 @@ import {
   resolveTextBoxFillColor,
   resolveTextBoxOutlineColor,
   getTextBoxOutlineWidthPx,
-} from '@juanmendez90/docx-core/docx/textBoxParser';
-import { emuToPixels } from '@juanmendez90/docx-core/docx/imageParser';
+} from '@eigenpal/docx-core/docx/textBoxParser';
+import { emuToPixels } from '@eigenpal/docx-core/docx/imageParser';
 
 /**
  * Props for the TextBox component

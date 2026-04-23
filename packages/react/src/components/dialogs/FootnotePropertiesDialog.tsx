@@ -13,7 +13,7 @@ import type {
   EndnotePosition,
   NoteNumberRestart,
   NumberFormat,
-} from '@juanmendez90/docx-core/types/document';
+} from '@eigenpal/docx-core/types/document';
 import { useTranslation } from '../../i18n';
 import type { TranslationKey } from '../../i18n';
 

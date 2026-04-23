@@ -11,8 +11,8 @@
  * ```
  */
 
-import type { Document, DocumentBody } from '@juanmendez90/docx-core/headless';
-import { parseDocx } from '@juanmendez90/docx-core/headless';
+import type { Document, DocumentBody } from '@eigenpal/docx-core/headless';
+import { parseDocx } from '@eigenpal/docx-core/headless';
 import type {
   ContentBlock,
   GetContentOptions,
@@ -53,7 +53,7 @@ export class DocxReviewer {
 
   /**
    * Create a reviewer from a parsed Document.
-   * @param document - Parsed Document from @juanmendez90/docx-core
+   * @param document - Parsed Document from @eigenpal/docx-core
    * @param author - Default author name for comments and changes. (default: 'AI')
    * @param originalBuffer - Original DOCX buffer, needed for toBuffer()
    */
@@ -273,7 +273,7 @@ export class DocxReviewer {
           'Use DocxReviewer.fromBuffer() or pass originalBuffer to the constructor.'
       );
     }
-    const { repackDocx } = await import('@juanmendez90/docx-core/headless');
+    const { repackDocx } = await import('@eigenpal/docx-core/headless');
     return repackDocx(this.doc);
   }
 }

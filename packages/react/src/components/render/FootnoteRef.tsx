@@ -17,7 +17,7 @@ import type {
   FootnoteProperties,
   EndnoteProperties,
   Theme,
-} from '@juanmendez90/docx-core/types/document';
+} from '@eigenpal/docx-core/types/document';
 
 // ============================================================================
 // TYPES
@@ -183,7 +183,7 @@ export function FootnoteRef({
         const noteElementId = type === 'footnote' ? `footnote-${id}` : `endnote-${id}`;
         const noteElement = document.getElementById(noteElementId);
         if (noteElement) {
-          noteElement.scrollIntoView({ behavior: 'instant', block: 'center' });
+          noteElement.scrollIntoView({ block: 'center' });
           noteElement.focus();
         }
       }

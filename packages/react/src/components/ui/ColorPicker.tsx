@@ -10,8 +10,8 @@
 
 import { useState, useCallback, useMemo } from 'react';
 import type { CSSProperties, ReactNode } from 'react';
-import type { ColorValue, Theme } from '@juanmendez90/docx-core/types/document';
-import { resolveHighlightColor } from '@juanmendez90/docx-core/utils/colorResolver';
+import type { ColorValue, Theme } from '@eigenpal/docx-core/types/document';
+import { resolveHighlightColor } from '@eigenpal/docx-core/utils/colorResolver';
 import { useFixedDropdown } from './useFixedDropdown';
 import { useTranslation } from '../../i18n';
 import type { TranslationKey } from '../../i18n';

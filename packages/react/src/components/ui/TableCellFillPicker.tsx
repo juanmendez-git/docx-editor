@@ -6,7 +6,7 @@
  */
 
 import { useCallback } from 'react';
-import type { ColorValue, Theme } from '@juanmendez90/docx-core/types/document';
+import type { ColorValue, Theme } from '@eigenpal/docx-core/types/document';
 import type { TableAction } from './TableToolbar';
 import { AdvancedColorPicker } from './AdvancedColorPicker';
 import { useTranslation } from '../../i18n';

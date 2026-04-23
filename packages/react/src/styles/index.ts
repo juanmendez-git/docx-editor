@@ -5,12 +5,12 @@
  * Import this file to include all editor styles:
  *
  * ```
- * import '@juanmendez90/docx-editor/styles';
+ * import '@eigenpal/docx-js-editor/styles';
  * ```
  *
  * Or import the CSS directly:
  * ```
- * import '@juanmendez90/docx-editor/styles/editor.css';
+ * import '@eigenpal/docx-js-editor/styles/editor.css';
  * ```
  */
 

@@ -5,7 +5,7 @@
  * and other MCP-compatible clients.
  *
  * Usage:
- *   npx @juanmendez90/docx-editor --mcp
+ *   npx -y @eigenpal/docx-core docx-editor-mcp
  *   docx-editor-mcp
  *
  * Claude Desktop configuration:
@@ -14,7 +14,7 @@
  *   "mcpServers": {
  *     "docx-editor": {
  *       "command": "npx",
- *       "args": ["-y", "@juanmendez90/docx-editor", "--mcp"]
+ *       "args": ["-y", "@eigenpal/docx-core", "docx-editor-mcp"]
  *     }
  *   }
  * }
@@ -84,7 +84,7 @@ CLAUDE DESKTOP CONFIGURATION:
     "mcpServers": {
       "docx-editor": {
         "command": "npx",
-        "args": ["-y", "@juanmendez90/docx-editor", "--mcp"]
+            "args": ["-y", "@eigenpal/docx-js-editor", "--mcp"]
       }
     }
   }

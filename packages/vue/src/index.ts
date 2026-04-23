@@ -1,7 +1,7 @@
-// @juanmendez90/docx-editor-vue
+// @eigenpal/docx-editor-vue
 // Vue.js wrapper for the DOCX editor — community contributed
 //
-// This package provides Vue 3 components wrapping @juanmendez90/docx-core.
+// This package provides Vue 3 components wrapping @eigenpal/docx-core.
 // Contributions welcome! See the repository README for guidelines.
 
 // renderAsync stub

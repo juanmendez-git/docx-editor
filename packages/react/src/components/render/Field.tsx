@@ -25,7 +25,7 @@ import type {
   ComplexField,
   Run as RunType,
   Theme,
-} from '@juanmendez90/docx-core/types/document';
+} from '@eigenpal/docx-core/types/document';
 import { Run } from './Run';
 import {
   getFieldDisplayValue,
@@ -37,7 +37,7 @@ import {
   isMergeField,
   isTocField,
   parseFieldInstruction,
-} from '@juanmendez90/docx-core/docx/fieldParser';
+} from '@eigenpal/docx-core/docx/fieldParser';
 
 /**
  * Props for the Field component

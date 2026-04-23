@@ -1,4 +1,4 @@
-# Contributing to @juanmendez90/docx-js-editor
+# Contributing to @eigenpal/docx-js-editor
 
 Thanks for your interest in contributing! This guide will help you get started.
 

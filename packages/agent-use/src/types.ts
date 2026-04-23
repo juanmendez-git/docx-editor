@@ -1,5 +1,5 @@
 /**
- * Types for @juanmendez90/docx-editor-agents
+ * Types for @eigenpal/docx-editor-agents
  */
 
 // ============================================================================

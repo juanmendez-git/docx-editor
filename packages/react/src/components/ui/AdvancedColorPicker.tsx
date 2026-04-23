@@ -1,13 +1,13 @@
 import { useState, useCallback, useMemo, useEffect } from 'react';
 import type { CSSProperties } from 'react';
-import type { ColorValue, Theme, ThemeColorScheme } from '@juanmendez90/docx-core/types/document';
+import type { ColorValue, Theme, ThemeColorScheme } from '@eigenpal/docx-core/types/document';
 import {
   generateThemeTintShadeMatrix,
   resolveColor,
   resolveColorToHex,
   resolveHighlightColor,
-} from '@juanmendez90/docx-core/utils/colorResolver';
-import type { ThemeMatrixCell } from '@juanmendez90/docx-core/utils/colorResolver';
+} from '@eigenpal/docx-core/utils/colorResolver';
+import type { ThemeMatrixCell } from '@eigenpal/docx-core/utils/colorResolver';
 import { useFixedDropdown } from './useFixedDropdown';
 import { MaterialSymbol } from './MaterialSymbol';
 import { useTranslation } from '../../i18n';

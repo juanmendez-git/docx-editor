@@ -19,7 +19,7 @@ import type {
   Shape as ShapeType,
   ShapeOutline,
   Paragraph,
-} from '@juanmendez90/docx-core/types/document';
+} from '@eigenpal/docx-core/types/document';
 import {
   isLineShape,
   isTextBoxShape,
@@ -33,8 +33,8 @@ import {
   getOutlineWidthPx,
   resolveFillColor,
   resolveOutlineColor,
-} from '@juanmendez90/docx-core/docx/shapeParser';
-import { emuToPixels } from '@juanmendez90/docx-core/docx/imageParser';
+} from '@eigenpal/docx-core/docx/shapeParser';
+import { emuToPixels } from '@eigenpal/docx-core/docx/imageParser';
 
 /**
  * Props for the Shape component

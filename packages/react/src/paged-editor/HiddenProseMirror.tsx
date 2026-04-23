@@ -29,15 +29,15 @@ import { CellSelection } from 'prosemirror-tables';
 import { EditorView, type DirectEditorProps } from 'prosemirror-view';
 import { undo, redo } from 'prosemirror-history';
 
-import { schema } from '@juanmendez90/docx-core/prosemirror/schema';
-import { toProseDoc, createEmptyDoc } from '@juanmendez90/docx-core/prosemirror/conversion';
-import { fromProseDoc } from '@juanmendez90/docx-core/prosemirror/conversion/fromProseDoc';
-import type { ExtensionManager } from '@juanmendez90/docx-core/prosemirror/extensions/ExtensionManager';
-import type { Document, Theme, StyleDefinitions } from '@juanmendez90/docx-core/types/document';
+import { schema } from '@eigenpal/docx-core/prosemirror/schema';
+import { toProseDoc, createEmptyDoc } from '@eigenpal/docx-core/prosemirror/conversion';
+import { fromProseDoc } from '@eigenpal/docx-core/prosemirror/conversion/fromProseDoc';
+import type { ExtensionManager } from '@eigenpal/docx-core/prosemirror/extensions/ExtensionManager';
+import type { Document, Theme, StyleDefinitions } from '@eigenpal/docx-core/types/document';
 
 // Import ProseMirror CSS
 import 'prosemirror-view/style/prosemirror.css';
-import '@juanmendez90/docx-core/prosemirror/editor.css';
+import '@eigenpal/docx-core/prosemirror/editor.css';
 
 // ============================================================================
 // TYPES

@@ -37,11 +37,8 @@ import { ImageSelectionOverlay, type ImageSelectionInfo } from './ImageSelection
 import { DecorationLayer } from './DecorationLayer';
 
 // Layout engine
-import {
-  layoutDocument,
-  findPageIndexContainingPmPos,
-} from '@juanmendez90/docx-core/layout-engine';
-import type { ColumnLayout } from '@juanmendez90/docx-core/layout-engine';
+import { layoutDocument, findPageIndexContainingPmPos } from '@eigenpal/docx-core/layout-engine';
+import type { ColumnLayout } from '@eigenpal/docx-core/layout-engine';
 import type {
   Layout,
   FlowBlock,
@@ -59,24 +56,24 @@ import type {
   ParagraphSpacing,
   TextBoxBlock,
   SectionBreakBlock,
-} from '@juanmendez90/docx-core/layout-engine/types';
+} from '@eigenpal/docx-core/layout-engine/types';
 import {
   DEFAULT_TEXTBOX_MARGINS,
   DEFAULT_TEXTBOX_WIDTH,
-} from '@juanmendez90/docx-core/layout-engine/types';
+} from '@eigenpal/docx-core/layout-engine/types';
 
 // Table commands (for quick-action insert buttons)
 import {
   addRowBelow,
   addColumnRight,
   findStartPosForParaId,
-} from '@juanmendez90/docx-core/prosemirror';
+} from '@eigenpal/docx-core/prosemirror';
 
 // Layout bridge
 import {
   toFlowBlocks,
   convertBorderSpecToLayout,
-} from '@juanmendez90/docx-core/layout-bridge/toFlowBlocks';
+} from '@eigenpal/docx-core/layout-bridge/toFlowBlocks';
 import {
   measureParagraph,
   resetCanvasContext,
@@ -84,30 +81,30 @@ import {
   getCachedParagraphMeasure,
   setCachedParagraphMeasure,
   type FloatingImageZone,
-} from '@juanmendez90/docx-core/layout-bridge/measuring';
+} from '@eigenpal/docx-core/layout-bridge/measuring';
 import {
   hitTestFragment,
   hitTestTableCell,
   getPageTop,
-} from '@juanmendez90/docx-core/layout-bridge/hitTest';
-import { clickToPosition } from '@juanmendez90/docx-core/layout-bridge/clickToPosition';
-import { clickToPositionDom } from '@juanmendez90/docx-core/layout-bridge/clickToPositionDom';
+} from '@eigenpal/docx-core/layout-bridge/hitTest';
+import { clickToPosition } from '@eigenpal/docx-core/layout-bridge/clickToPosition';
+import { clickToPositionDom } from '@eigenpal/docx-core/layout-bridge/clickToPositionDom';
 import {
   selectionToRects,
   getCaretPosition,
   type SelectionRect,
   type CaretPosition,
-} from '@juanmendez90/docx-core/layout-bridge/selectionRects';
-import { findWordBoundaries } from '@juanmendez90/docx-core/utils/textSelection';
+} from '@eigenpal/docx-core/layout-bridge/selectionRects';
+import { findWordBoundaries } from '@eigenpal/docx-core/utils/textSelection';
 
 // Layout painter
-import { LayoutPainter, type BlockLookup } from '@juanmendez90/docx-core/layout-painter';
+import { LayoutPainter, type BlockLookup } from '@eigenpal/docx-core/layout-painter';
 import {
   renderPages,
   type RenderPageOptions,
   type HeaderFooterContent,
   type FootnoteRenderItem,
-} from '@juanmendez90/docx-core/layout-painter/renderPage';
+} from '@eigenpal/docx-core/layout-painter/renderPage';
 
 // Selection sync
 import { LayoutSelectionGate } from './LayoutSelectionGate';
@@ -126,15 +123,15 @@ import type {
   StyleDefinitions,
   SectionProperties,
   HeaderFooter,
-} from '@juanmendez90/docx-core/types/document';
-import type { Footnote } from '@juanmendez90/docx-core/types/content';
-import { getFootnoteText } from '@juanmendez90/docx-core/docx/footnoteParser';
+} from '@eigenpal/docx-core/types/document';
+import type { Footnote } from '@eigenpal/docx-core/types/content';
+import { getFootnoteText } from '@eigenpal/docx-core/docx/footnoteParser';
 import {
   collectFootnoteRefs,
   mapFootnotesToPages,
   buildFootnoteContentMap,
   calculateFootnoteReservedHeights,
-} from '@juanmendez90/docx-core/layout-bridge/footnoteLayout';
+} from '@eigenpal/docx-core/layout-bridge/footnoteLayout';
 import type { RenderedDomContext } from '../plugin-api/types';
 import { createRenderedDomContext } from '../plugin-api/RenderedDomContext';
 import { findVerticalScrollParentOrRoot } from './findVerticalScrollParent';
@@ -218,7 +215,7 @@ export interface PagedEditorProps {
   /** External ProseMirror plugins. */
   externalPlugins?: Plugin[];
   /** Extension manager for plugins/schema/commands (optional — falls back to default) */
-  extensionManager?: import('@juanmendez90/docx-core/prosemirror/extensions/ExtensionManager').ExtensionManager;
+  extensionManager?: import('@eigenpal/docx-core/prosemirror/extensions/ExtensionManager').ExtensionManager;
   /** Callback when editor is ready. */
   onReady?: (ref: PagedEditorRef) => void;
   /** Callback when rendered DOM context is ready. */
@@ -2667,16 +2664,57 @@ const PagedEditorComponent = forwardRef<PagedEditorRef, PagedEditorProps>(
       return null;
     }, []);
 
-    /** Scroll pages to a ProseMirror position (handles virtualization via page shells). */
+    /**
+     * Scroll pages to a ProseMirror position (handles virtualization via page shells).
+     * @param forParaIdScroll — when true, use manual container scroll (reliable under CSS
+     *   transform / zoom). Otherwise use `scrollIntoView` (legacy behavior for outline,
+     *   bookmarks, etc.).
+     */
     const scrollToPositionImpl = useCallback(
-      (pmPos: number) => {
+      (pmPos: number, forParaIdScroll = false) => {
         const pages = pagesContainerRef.current;
         if (!pages) return;
 
-        const scroller = getScrollContainer() ?? findVerticalScrollParentOrRoot(pages);
-
         const queryPaintedStartEl = (): HTMLElement | null =>
           pages.querySelector(`[data-pm-start="${pmPos}"]`) as HTMLElement | null;
+
+        if (!forParaIdScroll) {
+          const targetEl = queryPaintedStartEl();
+          if (targetEl) {
+            targetEl.scrollIntoView({ block: 'center', inline: 'nearest' });
+            return;
+          }
+          const lay = layout;
+          const blk = blocks;
+          const meas = measures;
+          if (!lay || blk.length === 0 || meas.length !== blk.length) return;
+
+          let pageIndex: number | null = null;
+          const caret = getCaretPosition(lay, blk, meas, pmPos);
+          if (caret) {
+            pageIndex = caret.pageIndex;
+          } else {
+            pageIndex = findPageIndexContainingPmPos(lay, pmPos);
+          }
+          if (pageIndex == null) return;
+
+          const pageShells = pages.querySelectorAll('.layout-page');
+          const shell = pageShells[pageIndex] as HTMLElement | undefined;
+          if (!shell) return;
+
+          shell.scrollIntoView({ block: 'center', inline: 'nearest' });
+          requestAnimationFrame(() => {
+            requestAnimationFrame(() => {
+              requestAnimationFrame(() => {
+                const painted = queryPaintedStartEl();
+                if (painted) painted.scrollIntoView({ block: 'center', inline: 'nearest' });
+              });
+            });
+          });
+          return;
+        }
+
+        const scroller = getScrollContainer() ?? findVerticalScrollParentOrRoot(pages);
 
         const scrollPaintedTarget = (hybrid: boolean): boolean => {
           const targetEl = queryPaintedStartEl();
@@ -2731,7 +2769,7 @@ const PagedEditorComponent = forwardRef<PagedEditorRef, PagedEditorProps>(
         if (!state) return false;
         const startPos = findStartPosForParaId(state.doc, paraId);
         if (startPos == null) return false;
-        scrollToPositionImpl(startPos);
+        scrollToPositionImpl(startPos, true);
         const inner = Math.min(startPos + 1, state.doc.content.size);
         hiddenPMRef.current?.setSelection(inner);
         hiddenPMRef.current?.focus();

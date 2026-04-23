@@ -1,6 +1,6 @@
 import React, { useState, useRef, useCallback, useEffect, useMemo } from 'react';
-import { findStartPosForParaId } from '@juanmendez90/docx-js-editor/core';
-import { DocxEditor, type DocxEditorRef, createEmptyDocument } from '@juanmendez90/docx-js-editor';
+import { findStartPosForParaId } from '@eigenpal/docx-js-editor/core';
+import { DocxEditor, type DocxEditorRef, createEmptyDocument } from '@eigenpal/docx-js-editor';
 import { ExampleSwitcher } from '../../shared/ExampleSwitcher';
 import { GitHubBadge } from '../../shared/GitHubBadge';
 

@@ -1,5 +1,5 @@
 {
-  "name": "@juanmendez90/docx-core",
+  "name": "@eigenpal/docx-core",
   "version": "0.0.29",
   "sideEffects": false,
   "description": "Framework-agnostic core for DOCX parsing, editing, and rendering",

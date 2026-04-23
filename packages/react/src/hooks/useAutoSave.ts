@@ -13,9 +13,9 @@ import {
   getAutoSaveStorageSize,
   formatStorageSize,
   isAutoSaveSupported,
-} from '@juanmendez90/docx-core';
-import type { AutoSaveStatus, SavedDocumentData } from '@juanmendez90/docx-core';
-import type { Document } from '@juanmendez90/docx-core/types/document';
+} from '@eigenpal/docx-core';
+import type { AutoSaveStatus, SavedDocumentData } from '@eigenpal/docx-core';
+import type { Document } from '@eigenpal/docx-core/types/document';
 
 // ============================================================================
 // RE-EXPORT TYPES AND UTILITIES (backwards compat)

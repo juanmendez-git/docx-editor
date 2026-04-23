@@ -24,7 +24,7 @@ import {
   isSelectionWithin,
   injectSelectionStyles,
   areSelectionStylesInjected,
-} from '@juanmendez90/docx-core/utils/selectionHighlight';
+} from '@eigenpal/docx-core/utils/selectionHighlight';
 
 // ============================================================================
 // TYPES

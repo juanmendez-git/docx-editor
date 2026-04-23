@@ -26,29 +26,29 @@ export default defineConfig(async () => {
         // Resolve package imports to source for live development
         // Order matters: more-specific prefixes before less-specific ones
         {
-          find: '@juanmendez90/docx-js-editor',
+          find: '@eigenpal/docx-js-editor',
           replacement: path.join(monorepoRoot, 'packages/react/src/index.ts'),
         },
         {
-          find: '@juanmendez90/docx-core/headless',
+          find: '@eigenpal/docx-core/headless',
           replacement: path.join(monorepoRoot, 'packages/core/src/headless.ts'),
         },
         {
-          find: '@juanmendez90/docx-core/core-plugins',
+          find: '@eigenpal/docx-core/core-plugins',
           replacement: path.join(monorepoRoot, 'packages/core/src/core-plugins/index.ts'),
         },
         {
-          find: '@juanmendez90/docx-core/mcp',
+          find: '@eigenpal/docx-core/mcp',
           replacement: path.join(monorepoRoot, 'packages/core/src/mcp/index.ts'),
         },
-        // Wildcard alias for deep core imports (e.g. @juanmendez90/docx-core/utils/docxInput)
+        // Wildcard alias for deep core imports (e.g. @eigenpal/docx-core/utils/docxInput)
         {
-          find: /^@juanmendez90\/docx-core\/(.+)/,
+          find: /^@eigenpal\/docx-core\/(.+)/,
           replacement: path.join(monorepoRoot, 'packages/core/src/$1'),
         },
-        // Exact match for bare @juanmendez90/docx-core (must come AFTER the prefix match above)
+        // Exact match for bare @eigenpal/docx-core (must come AFTER the prefix match above)
         {
-          find: /^@juanmendez90\/docx-core$/,
+          find: /^@eigenpal\/docx-core$/,
           replacement: path.join(monorepoRoot, 'packages/core/src/core.ts'),
         },
         { find: '@', replacement: path.join(monorepoRoot, 'packages/react/src') },

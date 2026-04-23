@@ -22,20 +22,20 @@ import type {
   TableCellFormatting,
   Theme,
   Paragraph,
-} from '@juanmendez90/docx-core/types/document';
+} from '@eigenpal/docx-core/types/document';
 import {
   tableCellToStyle,
   borderToStyle,
   resolveShadingFill,
-} from '@juanmendez90/docx-core/utils/formatToStyle';
-import { twipsToPixels, formatPx } from '@juanmendez90/docx-core/utils/units';
+} from '@eigenpal/docx-core/utils/formatToStyle';
+import { twipsToPixels, formatPx } from '@eigenpal/docx-core/utils/units';
 import {
   getTableColumnCount,
   getTableRowCount,
   isCellMergeContinuation,
   isCellMergeStart,
   hasHeaderRow,
-} from '@juanmendez90/docx-core/docx/tableParser';
+} from '@eigenpal/docx-core/docx/tableParser';
 
 /**
  * Props for the DocTable component

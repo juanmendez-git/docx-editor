@@ -10,7 +10,7 @@
  *   pluginRegistry,
  *   docxtemplaterPlugin,
  *   type CorePlugin
- * } from '@juanmendez90/docx-editor/core-plugins';
+ * } from '@eigenpal/docx-js-editor/core-plugins';
  *
  * // Register the docxtemplater plugin
  * pluginRegistry.register(docxtemplaterPlugin);

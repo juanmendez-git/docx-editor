@@ -1,4 +1,4 @@
-# @juanmendez90/docx-editor-agents
+# @eigenpal/docx-editor-agents
 
 ## 0.0.35
 

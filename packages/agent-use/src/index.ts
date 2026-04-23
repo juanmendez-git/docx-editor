@@ -1,5 +1,5 @@
 /**
- * @juanmendez90/docx-editor-agents
+ * @eigenpal/docx-editor-agents
  *
  * Word-like API for AI document review.
  *

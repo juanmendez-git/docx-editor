@@ -20,10 +20,10 @@ import type {
   Image as ImageType,
   Shape as ShapeType,
   TextBox as TextBoxType,
-} from '@juanmendez90/docx-core/types/document';
-import { textToStyle, mergeStyles } from '@juanmendez90/docx-core/utils/formatToStyle';
-import { twipsToPixels, formatPx } from '@juanmendez90/docx-core/utils/units';
-import { formatNumber, getBulletCharacter } from '@juanmendez90/docx-core/docx/numberingParser';
+} from '@eigenpal/docx-core/types/document';
+import { textToStyle, mergeStyles } from '@eigenpal/docx-core/utils/formatToStyle';
+import { twipsToPixels, formatPx } from '@eigenpal/docx-core/utils/units';
+import { formatNumber, getBulletCharacter } from '@eigenpal/docx-core/docx/numberingParser';
 import { Paragraph } from './Paragraph';
 
 /**
@@ -449,7 +449,7 @@ export function getDefaultBullet(level: number): string {
  * Format a number according to its format type
  * Re-exported from numberingParser for convenience
  */
-export { formatNumber } from '@juanmendez90/docx-core/docx/numberingParser';
+export { formatNumber } from '@eigenpal/docx-core/docx/numberingParser';
 
 /**
  * Format number to Roman numerals (uppercase)
