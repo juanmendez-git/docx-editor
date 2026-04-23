@@ -1,5 +1,5 @@
 <p align="center">
-  <a href="https://github.com/eigenpal/docx-editor">
+  <a href="https://github.com/eigenpal/docx-js-editor">
     <img src="./assets/logo.png" alt="DOCX JS Editor" width="600" />
   </a>
 </p>
