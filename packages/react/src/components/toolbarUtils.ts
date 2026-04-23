@@ -9,8 +9,8 @@ import type {
   TextFormatting,
   ParagraphFormatting,
   Theme,
-} from '@eigenpal/docx-core/types/document';
-import { resolveColorToHex } from '@eigenpal/docx-core/utils/colorResolver';
+} from '@juanmendez90/docx-core/types/document';
+import { resolveColorToHex } from '@juanmendez90/docx-core/utils/colorResolver';
 import { pointsToHalfPoints } from './ui/FontSizePicker';
 import { createDefaultListState } from './ui/ListButtons';
 import type { SelectionFormatting, FormattingAction } from './Toolbar';

@@ -37,8 +37,11 @@ import { ImageSelectionOverlay, type ImageSelectionInfo } from './ImageSelection
 import { DecorationLayer } from './DecorationLayer';
 
 // Layout engine
-import { layoutDocument, findPageIndexContainingPmPos } from '@eigenpal/docx-core/layout-engine';
-import type { ColumnLayout } from '@eigenpal/docx-core/layout-engine';
+import {
+  layoutDocument,
+  findPageIndexContainingPmPos,
+} from '@juanmendez90/docx-core/layout-engine';
+import type { ColumnLayout } from '@juanmendez90/docx-core/layout-engine';
 import type {
   Layout,
   FlowBlock,
@@ -56,24 +59,24 @@ import type {
   ParagraphSpacing,
   TextBoxBlock,
   SectionBreakBlock,
-} from '@eigenpal/docx-core/layout-engine/types';
+} from '@juanmendez90/docx-core/layout-engine/types';
 import {
   DEFAULT_TEXTBOX_MARGINS,
   DEFAULT_TEXTBOX_WIDTH,
-} from '@eigenpal/docx-core/layout-engine/types';
+} from '@juanmendez90/docx-core/layout-engine/types';
 
 // Table commands (for quick-action insert buttons)
 import {
   addRowBelow,
   addColumnRight,
   findStartPosForParaId,
-} from '@eigenpal/docx-core/prosemirror';
+} from '@juanmendez90/docx-core/prosemirror';
 
 // Layout bridge
 import {
   toFlowBlocks,
   convertBorderSpecToLayout,
-} from '@eigenpal/docx-core/layout-bridge/toFlowBlocks';
+} from '@juanmendez90/docx-core/layout-bridge/toFlowBlocks';
 import {
   measureParagraph,
   resetCanvasContext,
@@ -81,30 +84,30 @@ import {
   getCachedParagraphMeasure,
   setCachedParagraphMeasure,
   type FloatingImageZone,
-} from '@eigenpal/docx-core/layout-bridge/measuring';
+} from '@juanmendez90/docx-core/layout-bridge/measuring';
 import {
   hitTestFragment,
   hitTestTableCell,
   getPageTop,
-} from '@eigenpal/docx-core/layout-bridge/hitTest';
-import { clickToPosition } from '@eigenpal/docx-core/layout-bridge/clickToPosition';
-import { clickToPositionDom } from '@eigenpal/docx-core/layout-bridge/clickToPositionDom';
+} from '@juanmendez90/docx-core/layout-bridge/hitTest';
+import { clickToPosition } from '@juanmendez90/docx-core/layout-bridge/clickToPosition';
+import { clickToPositionDom } from '@juanmendez90/docx-core/layout-bridge/clickToPositionDom';
 import {
   selectionToRects,
   getCaretPosition,
   type SelectionRect,
   type CaretPosition,
-} from '@eigenpal/docx-core/layout-bridge/selectionRects';
-import { findWordBoundaries } from '@eigenpal/docx-core/utils/textSelection';
+} from '@juanmendez90/docx-core/layout-bridge/selectionRects';
+import { findWordBoundaries } from '@juanmendez90/docx-core/utils/textSelection';
 
 // Layout painter
-import { LayoutPainter, type BlockLookup } from '@eigenpal/docx-core/layout-painter';
+import { LayoutPainter, type BlockLookup } from '@juanmendez90/docx-core/layout-painter';
 import {
   renderPages,
   type RenderPageOptions,
   type HeaderFooterContent,
   type FootnoteRenderItem,
-} from '@eigenpal/docx-core/layout-painter/renderPage';
+} from '@juanmendez90/docx-core/layout-painter/renderPage';
 
 // Selection sync
 import { LayoutSelectionGate } from './LayoutSelectionGate';
@@ -123,15 +126,15 @@ import type {
   StyleDefinitions,
   SectionProperties,
   HeaderFooter,
-} from '@eigenpal/docx-core/types/document';
-import type { Footnote } from '@eigenpal/docx-core/types/content';
-import { getFootnoteText } from '@eigenpal/docx-core/docx/footnoteParser';
+} from '@juanmendez90/docx-core/types/document';
+import type { Footnote } from '@juanmendez90/docx-core/types/content';
+import { getFootnoteText } from '@juanmendez90/docx-core/docx/footnoteParser';
 import {
   collectFootnoteRefs,
   mapFootnotesToPages,
   buildFootnoteContentMap,
   calculateFootnoteReservedHeights,
-} from '@eigenpal/docx-core/layout-bridge/footnoteLayout';
+} from '@juanmendez90/docx-core/layout-bridge/footnoteLayout';
 import type { RenderedDomContext } from '../plugin-api/types';
 import { createRenderedDomContext } from '../plugin-api/RenderedDomContext';
 import { findVerticalScrollParentOrRoot } from './findVerticalScrollParent';
@@ -215,7 +218,7 @@ export interface PagedEditorProps {
   /** External ProseMirror plugins. */
   externalPlugins?: Plugin[];
   /** Extension manager for plugins/schema/commands (optional — falls back to default) */
-  extensionManager?: import('@eigenpal/docx-core/prosemirror/extensions/ExtensionManager').ExtensionManager;
+  extensionManager?: import('@juanmendez90/docx-core/prosemirror/extensions/ExtensionManager').ExtensionManager;
   /** Callback when editor is ready. */
   onReady?: (ref: PagedEditorRef) => void;
   /** Callback when rendered DOM context is ready. */

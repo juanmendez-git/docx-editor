@@ -17,6 +17,8 @@ export default defineConfig({
   clean: true,
   treeshake: true,
   minify: true,
+  // Bundle core so dist does not keep subpath imports (those files are not published on npm).
+  noExternal: ['@juanmendez90/docx-core'],
   external: [
     'react',
     'react-dom',

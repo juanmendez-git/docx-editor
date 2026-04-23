@@ -1,12 +1,12 @@
 /**
- * @eigenpal/docx-js-editor/core
+ * @juanmendez90/docx-core
  *
  * Core entry point — types, parser, serializer, and utilities.
  * No React or ProseMirror dependencies.
  *
  * @example
  * ```ts
- * import { parseDocx, serializeDocx, resolveColor } from '@eigenpal/docx-js-editor/core';
+ * import { parseDocx, serializeDocx, resolveColor } from '@juanmendez90/docx-core';
  * ```
  */
 

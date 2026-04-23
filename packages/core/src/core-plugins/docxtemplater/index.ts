@@ -8,8 +8,8 @@
  *
  * @example
  * ```ts
- * import { pluginRegistry } from '@eigenpal/docx-editor/core-plugins';
- * import { docxtemplaterPlugin } from '@eigenpal/docx-editor/core-plugins/docxtemplater';
+ * import { pluginRegistry } from '@juanmendez90/docx-core/core-plugins';
+ * import { docxtemplaterPlugin } from '@juanmendez90/docx-core/core-plugins/docxtemplater';
  *
  * pluginRegistry.register(docxtemplaterPlugin);
  * ```

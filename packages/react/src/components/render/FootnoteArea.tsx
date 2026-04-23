@@ -17,7 +17,7 @@ import type {
   Paragraph,
   FootnoteProperties,
   EndnoteProperties,
-} from '@eigenpal/docx-core/types/document';
+} from '@juanmendez90/docx-core/types/document';
 import { formatNoteNumber } from './FootnoteRef';
 
 // ============================================================================

@@ -13,14 +13,14 @@
 
 import React from 'react';
 import type { CSSProperties, ReactNode } from 'react';
-import type { Table, TableCell, TableRow } from '@eigenpal/docx-core/types/document';
+import type { Table, TableCell, TableRow } from '@juanmendez90/docx-core/types/document';
 import {
   type CellAnchor,
   computeSplitLayout,
   computeSplitDialogDefaults,
   redistributeColumnWidths,
   buildAnchorMaps,
-} from '@eigenpal/docx-core/utils/tableSplitAlgorithm';
+} from '@juanmendez90/docx-core/utils/tableSplitAlgorithm';
 import { MaterialSymbol } from './MaterialSymbol';
 import { useTranslation } from '../../i18n';
 

@@ -26,7 +26,7 @@ import type {
   Theme,
   HeaderFooter,
   SectionProperties,
-} from '@eigenpal/docx-core/types/document';
+} from '@juanmendez90/docx-core/types/document';
 import defaultLocale from '../../i18n/en.json';
 
 import {
@@ -45,8 +45,12 @@ import { useCommentSidebarItems, type CommentCallbacks } from '../hooks/useComme
 import { useTrackedChanges } from '../hooks/useTrackedChanges';
 import type { EditorState as PMEditorState } from 'prosemirror-state';
 import type { ReactSidebarItem } from '../plugin-api/types';
-import type { HeadingInfo } from '@eigenpal/docx-core/utils/headingCollector';
-import type { Comment, BlockContent, ParagraphContent } from '@eigenpal/docx-core/types/content';
+import type { HeadingInfo } from '@juanmendez90/docx-core/utils/headingCollector';
+import type {
+  Comment,
+  BlockContent,
+  ParagraphContent,
+} from '@juanmendez90/docx-core/types/content';
 import { ErrorBoundary, ErrorProvider } from './ErrorBoundary';
 import type { TableAction } from './ui/TableToolbar';
 import { mapHexToHighlightName } from './toolbarUtils';
@@ -103,30 +107,30 @@ import {
 import { HyperlinkPopup, type HyperlinkPopupData } from './ui/HyperlinkPopup';
 import { Toaster, toast } from 'sonner';
 import { getBuiltinTableStyle, type TableStylePreset } from './ui/TableStyleGallery';
-import { DocumentAgent } from '@eigenpal/docx-core/agent/DocumentAgent';
+import { DocumentAgent } from '@juanmendez90/docx-core/agent/DocumentAgent';
 import { DefaultLoadingIndicator, DefaultPlaceholder, ParseError } from './DocxEditorHelpers';
-import { parseDocx } from '@eigenpal/docx-core/docx/parser';
-import { type DocxInput } from '@eigenpal/docx-core/utils/docxInput';
-import { onFontsLoaded, loadDocumentFonts } from '@eigenpal/docx-core/utils/fontLoader';
-import { resolveColorToHex } from '@eigenpal/docx-core/utils/colorResolver';
-import { executeCommand } from '@eigenpal/docx-core/agent/executor';
+import { parseDocx } from '@juanmendez90/docx-core/docx/parser';
+import { type DocxInput } from '@juanmendez90/docx-core/utils/docxInput';
+import { onFontsLoaded, loadDocumentFonts } from '@juanmendez90/docx-core/utils/fontLoader';
+import { resolveColorToHex } from '@juanmendez90/docx-core/utils/colorResolver';
+import { executeCommand } from '@juanmendez90/docx-core/agent/executor';
 import { useTableSelection } from '../hooks/useTableSelection';
 import { useDocumentHistory } from '../hooks/useHistory';
 import {
   getSplitCellDialogConfig,
   splitActiveTableCell,
-} from '@eigenpal/docx-core/prosemirror/commands/tableSplit';
+} from '@juanmendez90/docx-core/prosemirror/commands/tableSplit';
 
 // Extension system
-import { createStarterKit } from '@eigenpal/docx-core/prosemirror/extensions/StarterKit';
-import { ExtensionManager } from '@eigenpal/docx-core/prosemirror/extensions/ExtensionManager';
+import { createStarterKit } from '@juanmendez90/docx-core/prosemirror/extensions/StarterKit';
+import { ExtensionManager } from '@juanmendez90/docx-core/prosemirror/extensions/ExtensionManager';
 import {
   createSuggestionModePlugin,
   setSuggestionMode,
-} from '@eigenpal/docx-core/prosemirror/plugins/suggestionMode';
+} from '@juanmendez90/docx-core/prosemirror/plugins/suggestionMode';
 
 // Conversion (for HF inline editor save)
-import { proseDocToBlocks } from '@eigenpal/docx-core/prosemirror/conversion/fromProseDoc';
+import { proseDocToBlocks } from '@juanmendez90/docx-core/prosemirror/conversion/fromProseDoc';
 
 // ProseMirror editor
 import {
@@ -205,15 +209,15 @@ import {
   setTableBorderColor,
   setTableBorderWidth,
   type TableContextInfo,
-} from '@eigenpal/docx-core/prosemirror';
-import { acceptChange, rejectChange } from '@eigenpal/docx-core/prosemirror/commands/comments';
-import { collectHeadings } from '@eigenpal/docx-core/utils/headingCollector';
+} from '@juanmendez90/docx-core/prosemirror';
+import { acceptChange, rejectChange } from '@juanmendez90/docx-core/prosemirror/commands/comments';
+import { collectHeadings } from '@juanmendez90/docx-core/utils/headingCollector';
 import {
   getChangedParagraphIds,
   hasStructuralChanges,
   hasUntrackedChanges,
   clearTrackedChanges,
-} from '@eigenpal/docx-core/prosemirror/extensions/features/ParagraphChangeTrackerExtension';
+} from '@juanmendez90/docx-core/prosemirror/extensions/features/ParagraphChangeTrackerExtension';
 
 // Paginated editor
 import { PagedEditor, type PagedEditorRef } from '../paged-editor/PagedEditor';
@@ -413,7 +417,7 @@ interface EditorState {
   paragraphIndentRight: number;
   paragraphFirstLineIndent: number;
   paragraphHangingIndent: boolean;
-  paragraphTabs: import('@eigenpal/docx-core/types/document').TabStop[] | null;
+  paragraphTabs: import('@juanmendez90/docx-core/types/document').TabStop[] | null;
   /** ProseMirror table context (for showing table toolbar) */
   pmTableContext: TableContextInfo | null;
   /** Image context when cursor is on an image node */
@@ -1959,8 +1963,8 @@ export const DocxEditor = forwardRef<DocxEditorRef, DocxEditorProps>(function Do
   // Handle footnote/endnote properties update
   const handleApplyFootnoteProperties = useCallback(
     (
-      footnotePr: import('@eigenpal/docx-core/types/document').FootnoteProperties,
-      endnotePr: import('@eigenpal/docx-core/types/document').EndnoteProperties
+      footnotePr: import('@juanmendez90/docx-core/types/document').FootnoteProperties,
+      endnotePr: import('@juanmendez90/docx-core/types/document').EndnoteProperties
     ) => {
       if (!history.state?.package) return;
       const newDoc = {
@@ -3486,8 +3490,8 @@ body { background: white; }
   const handleHeaderFooterSave = useCallback(
     (
       content: (
-        | import('@eigenpal/docx-core/types/document').Paragraph
-        | import('@eigenpal/docx-core/types/document').Table
+        | import('@juanmendez90/docx-core/types/document').Paragraph
+        | import('@juanmendez90/docx-core/types/document').Table
       )[]
     ) => {
       if (!hfEditPosition || !history.state?.package) {

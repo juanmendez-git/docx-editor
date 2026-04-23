@@ -1,4 +1,15 @@
-# @eigenpal/docx-editor-agents
+# @juanmendez90/docx-editor-agents
+
+## 1.0.0
+
+### Major Changes
+
+- first
+
+### Patch Changes
+
+- Updated dependencies
+  - @juanmendez90/docx-core@1.0.0
 
 ## 0.0.35
 
@@ -28,7 +39,7 @@
 
 ### Patch Changes
 
-- [`d77716f`](https://github.com/eigenpal/docx-editor/commit/d77716f3abc8580ca48d9e2280f6564ce17df443) Thanks [@jedrazb](https://github.com/jedrazb)! - Bump
+- [`d77716f`](https://github.com/juanmendez-git/docx-editor/commit/d77716f3abc8580ca48d9e2280f6564ce17df443) Thanks [@jedrazb](https://github.com/jedrazb)! - Bump
 
 ## 0.0.30
 

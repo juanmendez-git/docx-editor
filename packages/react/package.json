@@ -1,6 +1,6 @@
 {
-  "name": "@eigenpal/docx-js-editor",
-  "version": "0.0.35",
+  "name": "@juanmendez90/docx-js-editor",
+  "version": "1.1.0",
   "description": "A browser-based DOCX template editor with variable insertion support",
   "main": "./dist/index.js",
   "module": "./dist/index.mjs",
@@ -76,7 +76,7 @@
   "scripts": {
     "build": "tsup && bun run build:css",
     "build:css": "tailwindcss -c ../../tailwind.config.lib.js -i ./src/styles/editor.css -o ./dist/styles.css --minify",
-    "prepublishOnly": "bun run build && sed -e 's|\\./assets/|https://raw.githubusercontent.com/eigenpal/docx-js-editor/main/assets/|g' -e 's|(packages/|(https://github.com/eigenpal/docx-js-editor/tree/main/packages/|g' -e 's|(docs/|(https://github.com/eigenpal/docx-js-editor/blob/main/docs/|g' -e 's|(examples/|(https://github.com/eigenpal/docx-js-editor/tree/main/examples/|g' ../../README.md > README.md",
+    "prepublishOnly": "bun run build && sed -e 's|\\./assets/|https://raw.githubusercontent.com/juanmendez-git/docx-editor/main/assets/|g' -e 's|(packages/|(https://github.com/juanmendez-git/docx-editor/tree/main/packages/|g' -e 's|(docs/|(https://github.com/juanmendez-git/docx-editor/blob/main/docs/|g' -e 's|(examples/|(https://github.com/juanmendez-git/docx-editor/tree/main/examples/|g' ../../README.md > README.md",
     "typecheck": "tsc --noEmit"
   },
   "peerDependencies": {
@@ -92,6 +92,7 @@
     }
   },
   "dependencies": {
+    "@juanmendez90/docx-core": "^1.0.0",
     "@radix-ui/react-select": "^2.2.6",
     "clsx": "^2.1.0",
     "prosemirror-commands": "^1.5.2",
@@ -118,7 +119,7 @@
   "license": "MIT",
   "repository": {
     "type": "git",
-    "url": "https://github.com/eigenpal/docx-js-editor.git",
+    "url": "https://github.com/juanmendez-git/docx-editor.git",
     "directory": "packages/react"
   },
   "publishConfig": {

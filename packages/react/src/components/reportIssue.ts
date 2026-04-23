@@ -5,7 +5,7 @@
  * user to drag-drop their DOCX onto the issue after it opens.
  */
 
-const ISSUE_URL = 'https://github.com/eigenpal/docx-editor/issues/new';
+const ISSUE_URL = 'https://github.com/juanmendez-git/docx-editor/issues/new';
 
 export interface ReportIssueEnv {
   userAgent?: string;

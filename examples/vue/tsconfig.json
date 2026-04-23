@@ -11,9 +11,9 @@
     "lib": ["ES2020", "DOM", "DOM.Iterable"],
     "skipLibCheck": true,
     "paths": {
-      "@eigenpal/docx-editor-vue": ["../../packages/vue/src/index.ts"],
-      "@eigenpal/docx-core": ["../../packages/core/src/core.ts"],
-      "@eigenpal/docx-core/*": ["../../packages/core/src/*"]
+      "@juanmendez90/docx-editor-vue": ["../../packages/vue/src/index.ts"],
+      "@juanmendez90/docx-core": ["../../packages/core/src/core.ts"],
+      "@juanmendez90/docx-core/*": ["../../packages/core/src/*"]
     }
   },
   "include": ["src"]

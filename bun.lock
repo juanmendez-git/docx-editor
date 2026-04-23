@@ -37,9 +37,10 @@
       },
     },
     "packages/agent-use": {
-      "name": "@eigenpal/docx-editor-agents",
-      "version": "0.0.31",
+      "name": "@juanmendez90/docx-editor-agents",
+      "version": "0.0.36",
       "dependencies": {
+        "@juanmendez90/docx-core": "^0.0.29",
         "docxtemplater": "^3.50.0",
         "jszip": "^3.10.1",
         "pizzip": "^3.1.7",
@@ -47,8 +48,8 @@
       },
     },
     "packages/core": {
-      "name": "@eigenpal/docx-core",
-      "version": "0.0.28",
+      "name": "@juanmendez90/docx-core",
+      "version": "0.0.29",
       "bin": {
         "docx-editor-mcp": "./dist/mcp-cli.mjs",
       },
@@ -69,9 +70,10 @@
       },
     },
     "packages/react": {
-      "name": "@eigenpal/docx-js-editor",
-      "version": "0.0.31",
+      "name": "@juanmendez90/docx-js-editor",
+      "version": "1.1.0",
       "dependencies": {
+        "@juanmendez90/docx-core": "^1.0.0",
         "@radix-ui/react-select": "^2.2.6",
         "clsx": "^2.1.0",
         "prosemirror-commands": "^1.5.2",
@@ -95,13 +97,14 @@
       ],
     },
     "packages/vue": {
-      "name": "@eigenpal/docx-editor-vue",
+      "name": "@juanmendez90/docx-editor-vue",
       "version": "0.0.1",
       "dependencies": {
-        "@eigenpal/docx-core": "workspace:*",
+        "@juanmendez90/docx-core": "workspace:*",
       },
       "devDependencies": {
         "prosemirror-view": "^1.41.6",
+        "vue": "^3.5.13",
       },
       "peerDependencies": {
         "vue": "^3.0.0",
@@ -188,14 +191,6 @@
     "@changesets/types": ["@changesets/types@6.1.0", "", {}, "sha512-rKQcJ+o1nKNgeoYRHKOS07tAMNd3YSN0uHaJOZYjBAgxfV7TUE7JE+z4BzZdQwb5hKaYbayKN5KrYV7ODb2rAA=="],
 
     "@changesets/write": ["@changesets/write@0.4.0", "", { "dependencies": { "@changesets/types": "^6.1.0", "fs-extra": "^7.0.1", "human-id": "^4.1.1", "prettier": "^2.7.1" } }, "sha512-CdTLvIOPiCNuH71pyDu3rA+Q0n65cmAbXnwWH84rKGiFumFzkmHNT8KHTMEchcxN+Kl8I54xGUhJ7l3E7X396Q=="],
-
-    "@eigenpal/docx-core": ["@eigenpal/docx-core@workspace:packages/core"],
-
-    "@eigenpal/docx-editor-agents": ["@eigenpal/docx-editor-agents@workspace:packages/agent-use"],
-
-    "@eigenpal/docx-editor-vue": ["@eigenpal/docx-editor-vue@workspace:packages/vue"],
-
-    "@eigenpal/docx-js-editor": ["@eigenpal/docx-js-editor@workspace:packages/react"],
 
     "@esbuild/aix-ppc64": ["@esbuild/aix-ppc64@0.27.4", "", { "os": "aix", "cpu": "ppc64" }, "sha512-cQPwL2mp2nSmHHJlCyoXgHGhbEPMrEEU5xhkcy3Hs/O7nGZqEpZ2sUtLaL9MORLtDfRvVl2/3PAuEkYZH0Ty8Q=="],
 
@@ -292,6 +287,14 @@
     "@jridgewell/sourcemap-codec": ["@jridgewell/sourcemap-codec@1.5.5", "", {}, "sha512-cYQ9310grqxueWbl+WuIUIaiUaDcj7WOq5fVhEljNVgRfOUhY9fy2zTvfoqWsnebh8Sl70VScFbICvJnLKB0Og=="],
 
     "@jridgewell/trace-mapping": ["@jridgewell/trace-mapping@0.3.31", "", { "dependencies": { "@jridgewell/resolve-uri": "^3.1.0", "@jridgewell/sourcemap-codec": "^1.4.14" } }, "sha512-zzNR+SdQSDJzc8joaeP8QQoCQr8NuYx2dIIytl1QeBEZHJ9uW6hebsrYgbz8hJwUQao3TWCMtmfV8Nu1twOLAw=="],
+
+    "@juanmendez90/docx-core": ["@juanmendez90/docx-core@workspace:packages/core"],
+
+    "@juanmendez90/docx-editor-agents": ["@juanmendez90/docx-editor-agents@workspace:packages/agent-use"],
+
+    "@juanmendez90/docx-editor-vue": ["@juanmendez90/docx-editor-vue@workspace:packages/vue"],
+
+    "@juanmendez90/docx-js-editor": ["@juanmendez90/docx-js-editor@workspace:packages/react"],
 
     "@manypkg/find-root": ["@manypkg/find-root@1.1.0", "", { "dependencies": { "@babel/runtime": "^7.5.5", "@types/node": "^12.7.1", "find-up": "^4.1.0", "fs-extra": "^8.1.0" } }, "sha512-mki5uBvhHzO8kYYix/WRy2WX8S3B5wdVSc9D6KcU5lQNglP2yt58/VfLuAK49glRXChosY8ap2oJ1qgma3GUVA=="],
 
