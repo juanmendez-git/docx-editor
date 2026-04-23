@@ -1,4 +1,5 @@
 import React, { useState, useRef, useCallback, useEffect, useMemo } from 'react';
+import { findStartPosForParaId } from '@eigenpal/docx-js-editor/core';
 import { DocxEditor, type DocxEditorRef, createEmptyDocument } from '@eigenpal/docx-js-editor';
 import { ExampleSwitcher } from '../../shared/ExampleSwitcher';
 import { GitHubBadge } from '../../shared/GitHubBadge';
@@ -94,6 +95,48 @@ export function App() {
   const [status, setStatus] = useState<string>('');
 
   const { zoom: autoZoom, isMobile } = useResponsiveLayout();
+
+  useEffect(() => {
+    window.__DOCX_EDITOR_E2E__ = {
+      getPmStartForParaId: (paraId: string) => {
+        const state = editorRef.current?.getEditorRef()?.getState?.();
+        if (!state || !paraId) return null;
+        return findStartPosForParaId(state.doc, paraId);
+      },
+      getFirstTextblockParaId: () => {
+        const view = editorRef.current?.getEditorRef()?.getView?.();
+        if (!view) return null;
+        let found: string | null = null;
+        view.state.doc.descendants((node) => {
+          if (node.isTextblock && node.attrs?.paraId) {
+            found = String(node.attrs.paraId);
+            return false;
+          }
+          return true;
+        });
+        return found;
+      },
+      getLastTextblockParaId: () => {
+        const view = editorRef.current?.getEditorRef()?.getView?.();
+        if (!view) return null;
+        let found: string | null = null;
+        view.state.doc.descendants((node) => {
+          if (node.isTextblock && node.attrs?.paraId) {
+            found = String(node.attrs.paraId);
+          }
+          return true;
+        });
+        return found;
+      },
+      scrollToParaId: (paraId: string) => editorRef.current?.scrollToParaId(paraId) ?? false,
+      scrollToPosition: (pmPos: number) => {
+        editorRef.current?.getEditorRef()?.scrollToPosition(pmPos);
+      },
+    };
+    return () => {
+      delete window.__DOCX_EDITOR_E2E__;
+    };
+  }, []);
 
   useEffect(() => {
     fetch('/docx-editor-demo.docx')

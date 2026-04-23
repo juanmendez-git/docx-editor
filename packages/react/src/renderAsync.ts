@@ -41,6 +41,8 @@ export type RenderAsyncOptions = Omit<DocxEditorProps, 'documentBuffer' | 'docum
 export interface DocxEditorHandle extends EditorHandle {
   /** Set zoom level (1.0 = 100%). */
   setZoom: (zoom: number) => void;
+  /** Scroll to a body paragraph by Word `w14:paraId`. */
+  scrollToParaId: (paraId: string) => boolean;
 }
 
 /**
@@ -78,6 +80,7 @@ export function renderAsync(
       getDocument: () => ref.current?.getDocument() ?? null,
       focus: () => ref.current?.focus(),
       setZoom: (z) => ref.current?.setZoom(z),
+      scrollToParaId: (paraId: string) => ref.current?.scrollToParaId(paraId) ?? false,
       destroy: () => {
         root?.unmount();
         root = null;

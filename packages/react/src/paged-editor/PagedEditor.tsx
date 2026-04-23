@@ -37,7 +37,7 @@ import { ImageSelectionOverlay, type ImageSelectionInfo } from './ImageSelection
 import { DecorationLayer } from './DecorationLayer';
 
 // Layout engine
-import { layoutDocument } from '@eigenpal/docx-core/layout-engine';
+import { layoutDocument, findPageIndexContainingPmPos } from '@eigenpal/docx-core/layout-engine';
 import type { ColumnLayout } from '@eigenpal/docx-core/layout-engine';
 import type {
   Layout,
@@ -63,7 +63,7 @@ import {
 } from '@eigenpal/docx-core/layout-engine/types';
 
 // Table commands (for quick-action insert buttons)
-import { addRowBelow, addColumnRight } from '@eigenpal/docx-core/prosemirror';
+import { addRowBelow, addColumnRight, findStartPosForParaId } from '@eigenpal/docx-core/prosemirror';
 
 // Layout bridge
 import {
@@ -130,6 +130,46 @@ import {
 } from '@eigenpal/docx-core/layout-bridge/footnoteLayout';
 import type { RenderedDomContext } from '../plugin-api/types';
 import { createRenderedDomContext } from '../plugin-api/RenderedDomContext';
+
+/** Nearest vertical scroll ancestor of `pages` (fallback: document root). */
+function findScrollParentFromPages(pages: HTMLElement): HTMLElement {
+  let cur: HTMLElement | null = pages;
+  while (cur && cur !== document.documentElement) {
+    const ancestor: HTMLElement | null = cur.parentElement;
+    if (!ancestor) break;
+    const { overflowY } = getComputedStyle(ancestor);
+    if (
+      (overflowY === 'auto' || overflowY === 'scroll') &&
+      ancestor.scrollHeight > ancestor.clientHeight + 1
+    ) {
+      return ancestor;
+    }
+    cur = ancestor;
+  }
+  return document.documentElement;
+}
+
+/** True when the target is mostly outside the scroller (prefer `instant`). */
+function isScrollTargetFar(el: HTMLElement, pages: HTMLElement): boolean {
+  const scroller = findScrollParentFromPages(pages);
+  const er = el.getBoundingClientRect();
+  const sr = scroller.getBoundingClientRect();
+
+  const overlapTop = Math.max(er.top, sr.top);
+  const overlapBottom = Math.min(er.bottom, sr.bottom);
+  const overlapH = Math.max(0, overlapBottom - overlapTop);
+  const elH = Math.max(1, er.height);
+  const visibleRatio = overlapH / elH;
+
+  const edgePad = 4;
+  const fullyOutside = er.bottom <= sr.top + edgePad || er.top >= sr.bottom - edgePad;
+  if (fullyOutside) {
+    return true;
+  }
+
+  const minVisibleRatio = 0.22;
+  return visibleRatio < minVisibleRatio;
+}
 
 // =============================================================================
 // TYPES
@@ -230,6 +270,11 @@ export interface PagedEditorRef {
   relayout(): void;
   /** Scroll the visible pages to bring a PM position into view. */
   scrollToPosition(pmPos: number): void;
+  /**
+   * Scroll to the paragraph identified by Word `w14:paraId` / PM `paraId`.
+   * @returns whether a matching paragraph was found
+   */
+  scrollToParaId(paraId: string): boolean;
 }
 
 // =============================================================================
@@ -2609,15 +2654,76 @@ const PagedEditorComponent = forwardRef<PagedEditorRef, PagedEditorProps>(
       return null;
     }, []);
 
-    /** Scroll visible pages to a ProseMirror position */
-    const scrollToPositionImpl = useCallback((pmPos: number) => {
-      const pageContainer = pagesContainerRef.current;
-      if (!pageContainer) return;
-      const targetEl = pageContainer.querySelector(`[data-pm-start="${pmPos}"]`);
-      if (targetEl) {
-        targetEl.scrollIntoView({ behavior: 'smooth', block: 'center' });
-      }
-    }, []);
+    /** Scroll pages to a ProseMirror position (handles virtualization via page shells). */
+    const scrollToPositionImpl = useCallback(
+      (pmPos: number) => {
+        const pages = pagesContainerRef.current;
+        if (!pages) return;
+
+        const queryPaintedStartEl = (): HTMLElement | null =>
+          pages.querySelector(`[data-pm-start="${pmPos}"]`) as HTMLElement | null;
+
+        const scrollPaintedTarget = (hybrid: boolean): boolean => {
+          const targetEl = queryPaintedStartEl();
+          if (!targetEl) return false;
+          const useSmooth = hybrid && !isScrollTargetFar(targetEl, pages);
+          targetEl.scrollIntoView({ behavior: useSmooth ? 'smooth' : 'instant', block: 'center' });
+          return true;
+        };
+
+        if (scrollPaintedTarget(true)) return;
+
+        const lay = layout;
+        const blk = blocks;
+        const meas = measures;
+        if (!lay || blk.length === 0 || meas.length !== blk.length) return;
+
+        let pageIndex: number | null = null;
+        const caret = getCaretPosition(lay, blk, meas, pmPos);
+        if (caret) {
+          pageIndex = caret.pageIndex;
+        } else {
+          pageIndex = findPageIndexContainingPmPos(lay, pmPos);
+        }
+        if (pageIndex == null) return;
+
+        const pageShells = pages.querySelectorAll('.layout-page');
+        const shell = pageShells[pageIndex] as HTMLElement | undefined;
+        if (!shell) return;
+
+        // Long jump / virtualization: snap shell first; smooth center once content exists.
+        shell.scrollIntoView({ behavior: 'instant', block: 'center' });
+
+        requestAnimationFrame(() => {
+          requestAnimationFrame(() => {
+            requestAnimationFrame(() => {
+              const painted = queryPaintedStartEl();
+              if (painted) {
+                painted.scrollIntoView({ behavior: 'smooth', block: 'center' });
+              } else {
+                scrollPaintedTarget(false);
+              }
+            });
+          });
+        });
+      },
+      [layout, blocks, measures]
+    );
+
+    const scrollToParaIdImpl = useCallback(
+      (paraId: string): boolean => {
+        const state = hiddenPMRef.current?.getState();
+        if (!state) return false;
+        const startPos = findStartPosForParaId(state.doc, paraId);
+        if (startPos == null) return false;
+        scrollToPositionImpl(startPos);
+        const inner = Math.min(startPos + 1, state.doc.content.size);
+        hiddenPMRef.current?.setSelection(inner);
+        hiddenPMRef.current?.focus();
+        return true;
+      },
+      [scrollToPositionImpl]
+    );
 
     /**
      * Handle mousedown on pages - start selection or drag.
@@ -3912,8 +4018,9 @@ const PagedEditorComponent = forwardRef<PagedEditorRef, PagedEditorProps>(
           }
         },
         scrollToPosition: scrollToPositionImpl,
+        scrollToParaId: scrollToParaIdImpl,
       }),
-      [layout, runLayoutPipeline, scrollToPositionImpl]
+      [layout, runLayoutPipeline, scrollToPositionImpl, scrollToParaIdImpl]
     );
 
     // Update selection overlay when layout changes
@@ -3956,9 +4063,10 @@ const PagedEditorComponent = forwardRef<PagedEditorRef, PagedEditorProps>(
             }
           },
           scrollToPosition: scrollToPositionImpl,
+          scrollToParaId: scrollToParaIdImpl,
         });
       }
-    }, [layout, runLayoutPipeline]);
+    }, [layout, runLayoutPipeline, scrollToParaIdImpl]);
     // NOTE: onReady removed from dependencies - accessed via ref to prevent infinite loops
 
     // =========================================================================

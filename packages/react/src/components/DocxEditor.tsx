@@ -384,6 +384,11 @@ export interface DocxEditorRef {
   getTotalPages: () => number;
   /** Scroll to a specific page */
   scrollToPage: (pageNumber: number) => void;
+  /**
+   * Scroll the paginated view to the paragraph with the given Word `w14:paraId`.
+   * @returns whether a matching paragraph exists in the ProseMirror document
+   */
+  scrollToParaId: (paraId: string) => boolean;
   /** Open print preview */
   openPrintPreview: () => void;
   /** Print the document directly */
@@ -3308,6 +3313,7 @@ body { background: white; }
       scrollToPage: (_pageNumber: number) => {
         // TODO: Implement page navigation in ProseMirror
       },
+      scrollToParaId: (paraId: string) => pagedEditorRef.current?.scrollToParaId(paraId) ?? false,
       openPrintPreview: handleDirectPrint,
       print: handleDirectPrint,
       loadDocument: loadParsedDocument,

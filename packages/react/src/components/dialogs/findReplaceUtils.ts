@@ -390,6 +390,6 @@ export function scrollToMatch(containerElement: HTMLElement | null, match: FindM
   );
 
   if (paragraphElement) {
-    paragraphElement.scrollIntoView({ behavior: 'smooth', block: 'center' });
+    paragraphElement.scrollIntoView({ behavior: 'instant', block: 'center' });
   }
 }

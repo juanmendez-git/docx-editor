@@ -778,3 +778,4 @@ export {
   getEffectiveColumns,
 } from './section-breaks';
 export type { SectionState, BreakDecision } from './section-breaks';
+export { findPageIndexContainingPmPos } from './findPageIndexContainingPmPos';

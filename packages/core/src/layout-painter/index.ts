@@ -303,7 +303,7 @@ export class LayoutPainter {
   scrollToPage(pageNumber: number): void {
     const state = this.pageStates.find((s) => s.pageNumber === pageNumber);
     if (state?.element) {
-      state.element.scrollIntoView({ behavior: 'smooth', block: 'start' });
+      state.element.scrollIntoView({ behavior: 'instant', block: 'start' });
     }
   }
 }

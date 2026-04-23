@@ -25,6 +25,10 @@ export default defineConfig(async () => {
         // Resolve package imports to source for live development
         // Order matters: more-specific prefixes before less-specific ones
         {
+          find: '@eigenpal/docx-js-editor/core',
+          replacement: path.join(monorepoRoot, 'packages/react/src/core-reexport.ts'),
+        },
+        {
           find: '@eigenpal/docx-js-editor',
           replacement: path.join(monorepoRoot, 'packages/react/src/index.ts'),
         },
