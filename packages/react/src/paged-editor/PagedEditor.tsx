@@ -333,7 +333,7 @@ export interface PagedEditorRef {
 // =============================================================================
 
 // Default page size (US Letter at 96 DPI)
-const DEFAULT_PAGE_WIDTH = 816;
+export const DEFAULT_PAGE_WIDTH = 816;
 const DEFAULT_PAGE_HEIGHT = 1056;
 
 // Default margins (1 inch at 96 DPI)
@@ -3152,7 +3152,11 @@ const PagedEditorComponent = forwardRef<PagedEditorRef, PagedEditorProps>(
         // a superseding scroll cancels this too.
         const signal = scrollAbortRef.current?.signal;
         if (!signal) return true;
-        const inner = Math.min(startPos + 1, state.doc.content.size);
+        const targetNode = state.doc.nodeAt(startPos);
+        const inner =
+          targetNode?.isTextblock === true
+            ? Math.min(startPos + 1 + targetNode.content.size, state.doc.content.size)
+            : Math.min(startPos + 1, state.doc.content.size);
         runAfterPaint(() => {
           if (!hiddenPMRef.current) return;
           hiddenPMRef.current.setSelection(inner);

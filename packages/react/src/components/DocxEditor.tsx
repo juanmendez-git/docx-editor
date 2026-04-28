@@ -38,7 +38,12 @@ import {
 import type { FontOption } from './ui/FontPicker';
 import { EditorToolbar } from './EditorToolbar';
 import { pointsToHalfPoints } from './ui/FontSizePicker';
-import { DocumentOutline } from './DocumentOutline';
+import {
+  DocumentOutline,
+  OUTLINE_BUTTON_LEFT_OFFSET,
+  OUTLINE_BUTTON_RESERVED_SPACE,
+  OUTLINE_RESERVED_SPACE,
+} from './DocumentOutline';
 import { SIDEBAR_DOCUMENT_SHIFT } from './sidebar/constants';
 import { UnifiedSidebar } from './UnifiedSidebar';
 import { CommentMarginMarkers } from './CommentMarginMarkers';
@@ -217,7 +222,7 @@ import {
 } from '@eigenpal/docx-core/prosemirror/extensions/features/ParagraphChangeTrackerExtension';
 
 // Paginated editor
-import { PagedEditor, type PagedEditorRef } from '../paged-editor/PagedEditor';
+import { PagedEditor, type PagedEditorRef, DEFAULT_PAGE_WIDTH } from '../paged-editor/PagedEditor';
 
 // Plugin API types
 import type { RenderedDomContext } from '../plugin-api/types';
@@ -424,6 +429,50 @@ export interface DocxEditorRef {
   loadDocument: (doc: Document) => void;
   /** Load a DOCX buffer programmatically (ArrayBuffer, Uint8Array, Blob, or File) */
   loadDocumentBuffer: (buffer: DocxInput) => Promise<void>;
+  /** Add a comment programmatically. Anchored by Word `w14:paraId` so
+   * it survives unrelated edits. Returns the comment ID, or null if
+   * the paraId is unknown or the search text isn't found / is ambiguous. */
+  addComment: (options: {
+    paraId: string;
+    text: string;
+    author: string;
+    /** Optional: anchor to a specific phrase within the paragraph (must be unique). */
+    search?: string;
+  }) => number | null;
+  /** Reply to an existing comment. Returns the reply comment ID. */
+  replyToComment: (commentId: number, text: string, author: string) => number | null;
+  /** Resolve (mark as done) a comment. */
+  resolveComment: (commentId: number) => void;
+  /** Suggest a tracked change. Pass `replaceWith: ''` to delete the matched text;
+   * pass `search: ''` to insert at paragraph end. Returns false on missing paraId,
+   * missing/ambiguous search, or attempt to layer on an existing tracked change. */
+  proposeChange: (options: {
+    paraId: string;
+    search: string;
+    replaceWith: string;
+    author: string;
+  }) => boolean;
+  /** Locate every paragraph containing `query` (case-insensitive substring).
+   * Returns a stable handle (paraId + the matched phrase) the agent can pass
+   * back to `addComment` / `proposeChange`. */
+  findInDocument: (
+    query: string,
+    options?: { caseSensitive?: boolean; limit?: number }
+  ) => Array<{ paraId: string; match: string; before: string; after: string }>;
+  /** Read the user's current cursor / selection — what's highlighted right now. */
+  getSelectionInfo: () => {
+    paraId: string | null;
+    selectedText: string;
+    paragraphText: string;
+    before: string;
+    after: string;
+  } | null;
+  /** Get all comments. */
+  getComments: () => Comment[];
+  /** Subscribe to document changes. Fires after every committed edit. Returns unsubscribe. */
+  onContentChange: (listener: (document: Document) => void) => () => void;
+  /** Subscribe to selection changes (cursor moves / selection changes). Returns unsubscribe. */
+  onSelectionChange: (listener: (selection: SelectionState | null) => void) => () => void;
 }
 
 /**
@@ -510,7 +559,16 @@ function CommentsSidebarToggle({ active, onClick }: { active: boolean; onClick: 
  * Outline toggle — same reason as `CommentsSidebarToggle`: needs to render
  * inside `<LocaleProvider>` to see the user's `i18n` prop.
  */
-function OutlineToggleButton({ onClick, topPx }: { onClick: () => void; topPx: number }) {
+function OutlineToggleButton({
+  onClick,
+  topPx,
+  scrollLeft = 0,
+}: {
+  onClick: () => void;
+  topPx: number;
+  /** Horizontal scroll offset of the editor — button slides with the doc. */
+  scrollLeft?: number;
+}) {
   const { t } = useTranslation();
   return (
     <button
@@ -520,9 +578,11 @@ function OutlineToggleButton({ onClick, topPx }: { onClick: () => void; topPx: n
       title={t('editor.showDocumentOutline')}
       style={{
         position: 'absolute',
-        left: 48,
+        // Anchor at the page's top-left and track horizontal scroll so the
+        // button doesn't pin to the viewport and overlay the doc.
+        left: OUTLINE_BUTTON_LEFT_OFFSET - scrollLeft,
         top: topPx,
-        zIndex: 20,
+        zIndex: 50,
         background: 'transparent',
         border: 'none',
         borderRadius: '50%',
@@ -893,6 +953,87 @@ function getInitialSectionProperties(
 }
 
 /**
+ * Find the ProseMirror position range for a paragraph by Word `w14:paraId`.
+ * Stable across edits — the inverse of `formatContentForLLM`'s `[paraId]` line tag.
+ *
+ * Returns inclusive `from` (position before the textblock) and exclusive `to`
+ * (`from + nodeSize`). Text content lives in `[from + 1, to - 1]`.
+ */
+function findParaIdRange(
+  doc: import('prosemirror-model').Node,
+  paraId: string
+): { from: number; to: number } | null {
+  if (!paraId || !paraId.trim()) return null;
+  let result: { from: number; to: number } | null = null;
+  doc.descendants((node, pos) => {
+    if (result !== null) return false;
+    if (node.isTextblock && node.attrs?.paraId === paraId) {
+      result = { from: pos, to: pos + node.nodeSize };
+      return false;
+    }
+    return true;
+  });
+  return result;
+}
+
+/**
+ * Find a text string within a ProseMirror paragraph node range and return its positions.
+ *
+ * Returns null if:
+ *   - searchText is empty
+ *   - searchText is not found
+ *   - searchText appears more than once (ambiguous; caller must disambiguate)
+ *
+ * The fullText is built from PM text nodes only — agents must search using the
+ * visible text returned by `read_document` with annotations stripped (the bridge
+ * passes includeTrackedChanges/includeCommentAnchors=false for read_document by
+ * default, so the agent never sees [+...+] / [comment:N] markers in search input).
+ */
+function findTextInPmParagraph(
+  doc: import('prosemirror-model').Node,
+  paragraphFrom: number,
+  paragraphTo: number,
+  searchText: string
+): { from: number; to: number } | null {
+  if (!searchText) return null;
+
+  let fullText = '';
+  const textPositions: { pos: number; len: number }[] = [];
+
+  doc.nodesBetween(paragraphFrom, paragraphTo, (node, pos) => {
+    if (node.isText && node.text) {
+      textPositions.push({ pos, len: node.text.length });
+      fullText += node.text;
+    }
+  });
+
+  const firstMatch = fullText.indexOf(searchText);
+  if (firstMatch === -1) return null;
+  // Reject ambiguous searches — the LLM gets a clearer error than a silent mistarget.
+  const secondMatch = fullText.indexOf(searchText, firstMatch + 1);
+  if (secondMatch !== -1) return null;
+
+  // Map string offset to PM position
+  let charOffset = 0;
+  let fromPos = paragraphFrom;
+  let toPos = paragraphFrom;
+
+  for (const tp of textPositions) {
+    const segEnd = charOffset + tp.len;
+    if (charOffset <= firstMatch && firstMatch < segEnd) {
+      fromPos = tp.pos + (firstMatch - charOffset);
+    }
+    if (charOffset <= firstMatch + searchText.length && firstMatch + searchText.length <= segEnd) {
+      toPos = tp.pos + (firstMatch + searchText.length - charOffset);
+      break;
+    }
+    charOffset = segEnd;
+  }
+
+  return { from: fromPos, to: toPos };
+}
+
+/**
  * DocxEditor - Complete DOCX editor component
  */
 export const DocxEditor = forwardRef<DocxEditorRef, DocxEditorProps>(function DocxEditor(
@@ -1061,6 +1202,12 @@ export const DocxEditor = forwardRef<DocxEditorRef, DocxEditorProps>(function Do
   isAddingCommentRef.current = isAddingComment;
   const onCommentDeleteRef = useRef(onCommentDelete);
   onCommentDeleteRef.current = onCommentDelete;
+
+  // Bridge / agent event subscribers — fan-out from the existing onChange and
+  // onSelectionChange paths so multiple listeners (host app, MCP server, etc.)
+  // can observe edits without competing for the single React prop.
+  const contentChangeSubscribersRef = useRef(new Set<(doc: Document) => void>());
+  const selectionChangeSubscribersRef = useRef(new Set<(s: SelectionState | null) => void>());
   const onCommentsChangeRef = useRef(onCommentsChange);
   onCommentsChangeRef.current = onCommentsChange;
 
@@ -1223,6 +1370,12 @@ export const DocxEditor = forwardRef<DocxEditorRef, DocxEditorProps>(function Do
   const toolbarWrapperRef = useRef<HTMLDivElement>(null);
   const toolbarRoRef = useRef<ResizeObserver | null>(null);
   const [toolbarHeight, setToolbarHeight] = useState(0);
+  // Horizontal scroll offset of the editor scroll container. Used to pin the
+  // vertical ruler to the viewport's left edge during horizontal scroll
+  // (`position: sticky` won't work — it only kicks in after scrolling past the
+  // element's natural position, but we want the ruler at left=0 from the
+  // start). The horizontal ruler scrolls natively via sticky-top.
+  const [editorScrollLeft, setEditorScrollLeft] = useState(0);
   // Keep history.state accessible in stable callbacks without stale closures
   const historyStateRef = useRef(history.state);
   historyStateRef.current = history.state;
@@ -1280,6 +1433,30 @@ export const DocxEditor = forwardRef<DocxEditorRef, DocxEditorProps>(function Do
       toolbarRoRef.current?.disconnect();
     };
   }, []);
+
+  // Track horizontal scroll so the outline panel and toggle button slide
+  // with the doc instead of staying pinned. Re-runs after the loading state
+  // flips because the scroll container only mounts once the doc is ready.
+  // Updates are coalesced to one per frame — scroll events fire faster than
+  // React can re-render the whole editor tree.
+  useEffect(() => {
+    const el = scrollContainerRef.current;
+    if (!el) return;
+    let frame = 0;
+    const update = () => {
+      frame = 0;
+      setEditorScrollLeft(el.scrollLeft);
+    };
+    const onScroll = () => {
+      if (frame === 0) frame = requestAnimationFrame(update);
+    };
+    update();
+    el.addEventListener('scroll', onScroll, { passive: true });
+    return () => {
+      el.removeEventListener('scroll', onScroll);
+      if (frame !== 0) cancelAnimationFrame(frame);
+    };
+  }, [state.isLoading]);
 
   // Helper to get the active editor's view — returns HF editor view when in HF editing mode
   const getActiveEditorView = useCallback(() => {
@@ -1464,6 +1641,14 @@ export const DocxEditor = forwardRef<DocxEditorRef, DocxEditorProps>(function Do
     (newDocument: Document) => {
       pushDocument(newDocument);
       onChange?.(newDocument);
+      // Fan out to bridge subscribers (errors in one don't break the others).
+      for (const cb of contentChangeSubscribersRef.current) {
+        try {
+          cb(newDocument);
+        } catch (e) {
+          console.error('contentChange subscriber threw:', e);
+        }
+      }
       // Update outline headings if sidebar is open
       if (showOutlineRef.current) {
         const view = pagedEditorRef.current?.getView();
@@ -1676,6 +1861,14 @@ export const DocxEditor = forwardRef<DocxEditorRef, DocxEditorProps>(function Do
 
       // Notify parent
       onSelectionChange?.(selectionState);
+      // Fan out to bridge subscribers.
+      for (const cb of selectionChangeSubscribersRef.current) {
+        try {
+          cb(selectionState);
+        } catch (e) {
+          console.error('selectionChange subscriber threw:', e);
+        }
+      }
     },
     [onSelectionChange, isAddingComment, readOnly]
   );
@@ -3402,7 +3595,6 @@ body { background: white; }
       scrollToPage: (pageNumber: number) => {
         pagedEditorRef.current?.scrollToPage(pageNumber);
       },
-      scrollToParaId: (paraId: string) => pagedEditorRef.current?.scrollToParaId(paraId) ?? false,
       scrollToPosition: (pmPos: number) => {
         pagedEditorRef.current?.scrollToPosition(pmPos);
       },
@@ -3410,6 +3602,207 @@ body { background: white; }
       print: handleDirectPrint,
       loadDocument: loadParsedDocument,
       loadDocumentBuffer: loadBuffer,
+
+      addComment: (options) => {
+        const view = pagedEditorRef.current?.getView();
+        if (!view) return null;
+        const { schema } = view.state;
+        if (!schema.marks.comment) return null;
+
+        const range = findParaIdRange(view.state.doc, options.paraId);
+        if (!range) return null;
+
+        let from = range.from;
+        let to = range.to;
+
+        if (options.search) {
+          const textRange = findTextInPmParagraph(
+            view.state.doc,
+            range.from,
+            range.to,
+            options.search
+          );
+          if (!textRange) return null;
+          from = textRange.from;
+          to = textRange.to;
+        }
+
+        const comment = createComment(options.text, options.author);
+        const commentMark = schema.marks.comment.create({ commentId: comment.id });
+        view.dispatch(view.state.tr.addMark(from, to, commentMark));
+        setComments((prev) => [...prev, comment]);
+        setShowCommentsSidebar(true);
+        return comment.id;
+      },
+
+      replyToComment: (commentId, text, authorName) => {
+        if (!comments.some((c) => c.id === commentId)) return null;
+        const reply = createComment(text, authorName, commentId);
+        setComments((prev) => [...prev, reply]);
+        return reply.id;
+      },
+
+      resolveComment: (commentId) => {
+        setComments((prev) => prev.map((c) => (c.id === commentId ? { ...c, done: true } : c)));
+      },
+
+      proposeChange: (options) => {
+        const view = pagedEditorRef.current?.getView();
+        if (!view) return false;
+        const { schema } = view.state;
+        if (!schema.marks.deletion || !schema.marks.insertion) return false;
+
+        const range = findParaIdRange(view.state.doc, options.paraId);
+        if (!range) return false;
+
+        const isInsertion = options.search === '';
+        const isDeletion = options.replaceWith === '';
+
+        let textFrom: number;
+        let textTo: number;
+
+        if (isInsertion) {
+          // Insert at end of paragraph (just before closing token).
+          textFrom = range.to - 1;
+          textTo = range.to - 1;
+        } else {
+          const textRange = findTextInPmParagraph(
+            view.state.doc,
+            range.from,
+            range.to,
+            options.search
+          );
+          if (!textRange) return false;
+          textFrom = textRange.from;
+          textTo = textRange.to;
+        }
+
+        // Refuse to layer onto an existing tracked change.
+        let overlapsTrackedChange = false;
+        if (textFrom < textTo) {
+          view.state.doc.nodesBetween(textFrom, textTo, (node) => {
+            for (const m of node.marks) {
+              if (m.type === schema.marks.insertion || m.type === schema.marks.deletion) {
+                overlapsTrackedChange = true;
+                return false;
+              }
+            }
+            return true;
+          });
+          if (overlapsTrackedChange) return false;
+        }
+
+        const revisionId = nextCommentId++;
+        const date = new Date().toISOString();
+
+        const deletionMark = schema.marks.deletion.create({
+          revisionId,
+          author: options.author,
+          date,
+        });
+        const insertionMark = schema.marks.insertion.create({
+          revisionId,
+          author: options.author,
+          date,
+        });
+
+        let tr = view.state.tr;
+        if (!isInsertion) {
+          tr = tr.addMark(textFrom, textTo, deletionMark);
+        }
+        if (!isDeletion) {
+          const insertedNode = schema.text(options.replaceWith, [insertionMark]);
+          tr = tr.insert(textTo, insertedNode);
+        }
+
+        if (isInsertion && isDeletion) return false; // nothing to do
+        view.dispatch(tr);
+
+        setShowCommentsSidebar(true);
+        return true;
+      },
+
+      scrollToParaId: (paraId) => pagedEditorRef.current?.scrollToParaId(paraId) ?? false,
+
+      findInDocument: (query, opts) => {
+        const view = pagedEditorRef.current?.getView();
+        if (!view || !query) return [];
+        const caseSensitive = opts?.caseSensitive ?? false;
+        const limit = opts?.limit ?? 20;
+        const needle = caseSensitive ? query : query.toLowerCase();
+        const results: Array<{
+          paraId: string;
+          match: string;
+          before: string;
+          after: string;
+        }> = [];
+
+        view.state.doc.descendants((node) => {
+          if (results.length >= limit) return false;
+          if (!node.isTextblock) return true;
+          const paraId = node.attrs?.paraId as string | undefined;
+          if (!paraId) return false;
+          const text = node.textContent;
+          const haystack = caseSensitive ? text : text.toLowerCase();
+          const at = haystack.indexOf(needle);
+          if (at === -1) return false;
+
+          // Reject ambiguous matches in the same paragraph — agent should narrow query.
+          if (haystack.indexOf(needle, at + 1) !== -1) return false;
+
+          const match = text.slice(at, at + query.length);
+          const CONTEXT = 40;
+          results.push({
+            paraId,
+            match,
+            before: text.slice(Math.max(0, at - CONTEXT), at),
+            after: text.slice(at + query.length, at + query.length + CONTEXT),
+          });
+          return false;
+        });
+
+        return results;
+      },
+
+      getSelectionInfo: () => {
+        const view = pagedEditorRef.current?.getView();
+        if (!view) return null;
+        const { selection, doc } = view.state;
+        const $from = selection.$from;
+        // Walk up to nearest textblock
+        let depth = $from.depth;
+        while (depth > 0 && !$from.node(depth).isTextblock) depth--;
+        const para = depth > 0 ? $from.node(depth) : null;
+        if (!para) return null;
+        const paraId = (para.attrs?.paraId as string | undefined) ?? null;
+        const paragraphText = para.textContent;
+        const selectedText = doc.textBetween(selection.from, selection.to, '\n');
+        const paraStart = $from.start(depth);
+        const offsetInPara = selection.from - paraStart;
+        return {
+          paraId,
+          selectedText,
+          paragraphText,
+          before: paragraphText.slice(0, offsetInPara),
+          after: paragraphText.slice(offsetInPara + selectedText.length),
+        };
+      },
+
+      getComments: () => comments,
+
+      onContentChange: (listener) => {
+        contentChangeSubscribersRef.current.add(listener);
+        return () => {
+          contentChangeSubscribersRef.current.delete(listener);
+        };
+      },
+
+      onSelectionChange: (listener) => {
+        selectionChangeSubscribersRef.current.add(listener);
+        return () => {
+          selectionChangeSubscribersRef.current.delete(listener);
+        };
+      },
     }),
     [
       history.state,
@@ -3419,6 +3812,7 @@ body { background: white; }
       handleDirectPrint,
       loadParsedDocument,
       loadBuffer,
+      comments,
     ]
   );
 
@@ -3708,7 +4102,7 @@ body { background: white; }
     flexDirection: 'column',
     height: '100%',
     width: '100%',
-    backgroundColor: 'var(--doc-bg-subtle)',
+    backgroundColor: 'var(--doc-bg)',
     ...style,
   };
 
@@ -3853,6 +4247,20 @@ body { background: white; }
   }, [trackedChanges]);
 
   const sidebarOpen = allSidebarItems.length > 0;
+  // Reserve 2× the left-edge allowance so the centered page clears whatever
+  // outline UI is showing, without forcing a shift on wide viewports.
+  const outlineLeftAllowance = showOutline
+    ? OUTLINE_RESERVED_SPACE
+    : showOutlineButton
+      ? OUTLINE_BUTTON_RESERVED_SPACE
+      : 20;
+  const minLayoutWidth =
+    2 * outlineLeftAllowance + DEFAULT_PAGE_WIDTH + (sidebarOpen ? SIDEBAR_DOCUMENT_SHIFT * 2 : 0);
+
+  const sectionPropsPageWidth = history.state?.package?.document?.finalSectionProperties?.pageWidth;
+  const pageWidthPx = sectionPropsPageWidth
+    ? Math.round(sectionPropsPageWidth / 15)
+    : DEFAULT_PAGE_WIDTH;
 
   const resolvedCommentIds = useMemo(() => {
     const ids = new Set<number>();
@@ -4023,38 +4431,6 @@ body { background: white; }
                       </EditorToolbar.TitleBar>
                       <EditorToolbar.FormattingBar>{toolbarChildren}</EditorToolbar.FormattingBar>
                     </EditorToolbar>
-
-                    {/* Horizontal Ruler - sticky with toolbar */}
-                    {showRuler && (
-                      <div
-                        className="flex justify-center px-5 py-1 overflow-x-auto flex-shrink-0 bg-doc-bg"
-                        style={{
-                          paddingRight: sidebarOpen
-                            ? `calc(20px + ${SIDEBAR_DOCUMENT_SHIFT * 2}px)`
-                            : undefined,
-                          transition: 'padding 0.2s ease',
-                        }}
-                      >
-                        <HorizontalRuler
-                          sectionProps={initialSectionProperties}
-                          zoom={state.zoom}
-                          unit={rulerUnit}
-                          editable={!readOnly}
-                          onLeftMarginChange={handleLeftMarginChange}
-                          onRightMarginChange={handleRightMarginChange}
-                          indentLeft={state.paragraphIndentLeft}
-                          indentRight={state.paragraphIndentRight}
-                          onIndentLeftChange={handleIndentLeftChange}
-                          onIndentRightChange={handleIndentRightChange}
-                          showFirstLineIndent={true}
-                          firstLineIndent={state.paragraphFirstLineIndent}
-                          hangingIndent={state.paragraphHangingIndent}
-                          onFirstLineIndentChange={handleFirstLineIndentChange}
-                          tabStops={state.paragraphTabs}
-                          onTabStopRemove={handleTabStopRemove}
-                        />
-                      </div>
-                    )}
                   </div>
                 )}
 
@@ -4078,12 +4454,73 @@ body { background: white; }
                     setExpandedSidebarItem(null);
                   }}
                 >
-                  {/* Editor content wrapper */}
-                  <div style={{ display: 'flex', flex: 1, minHeight: 0, position: 'relative' }}>
+                  {/* Horizontal Ruler - inside the scroll container so it
+                      scrolls horizontally with the doc, sticky-top so it stays
+                      visible during vertical scroll. min-width keeps the ruler
+                      and the page area on the same horizontal axis when the
+                      viewport is too narrow to fit page + outline + sidebar. */}
+                  {showRuler && (
+                    <div
+                      className="flex justify-center py-1 flex-shrink-0 bg-doc-bg"
+                      style={{
+                        position: 'sticky',
+                        top: 0,
+                        zIndex: 9,
+                        // paddingRight biases the centered ruler so it tracks
+                        // the page when the comments sidebar (translateX)
+                        // shifts the page left. Outline doesn't bias here —
+                        // the page stays centered until minLayoutWidth forces
+                        // horizontal scroll, and the ruler centers with it.
+                        paddingLeft: 20,
+                        paddingRight: 20 + (sidebarOpen ? SIDEBAR_DOCUMENT_SHIFT * 2 : 0),
+                        minWidth: minLayoutWidth,
+                        transition: 'padding 0.2s ease',
+                      }}
+                    >
+                      <HorizontalRuler
+                        sectionProps={initialSectionProperties}
+                        zoom={state.zoom}
+                        unit={rulerUnit}
+                        editable={!readOnly}
+                        onLeftMarginChange={handleLeftMarginChange}
+                        onRightMarginChange={handleRightMarginChange}
+                        indentLeft={state.paragraphIndentLeft}
+                        indentRight={state.paragraphIndentRight}
+                        onIndentLeftChange={handleIndentLeftChange}
+                        onIndentRightChange={handleIndentRightChange}
+                        showFirstLineIndent={true}
+                        firstLineIndent={state.paragraphFirstLineIndent}
+                        hangingIndent={state.paragraphHangingIndent}
+                        onFirstLineIndentChange={handleFirstLineIndentChange}
+                        tabStops={state.paragraphTabs}
+                        onTabStopRemove={handleTabStopRemove}
+                      />
+                    </div>
+                  )}
+                  {/* Editor content wrapper. min-width matches the ruler so
+                      the page and ruler scroll horizontally as a single unit
+                      when the viewport is too narrow to fit them. When the
+                      outline is open, min-width grows to keep the centered
+                      page clear of the panel — but on wide viewports the
+                      page stays put (centered, or translated left by the
+                      comments sidebar) instead of shifting. */}
+                  <div
+                    style={{
+                      display: 'flex',
+                      flex: 1,
+                      minHeight: 0,
+                      position: 'relative',
+                      minWidth: minLayoutWidth,
+                    }}
+                  >
                     {/* Editor content area */}
                     <div
                       ref={editorContentRef}
-                      style={{ position: 'relative', flex: 1, minWidth: 0 }}
+                      style={{
+                        position: 'relative',
+                        flex: 1,
+                        minWidth: 0,
+                      }}
                       onMouseDown={(e) => {
                         // Focus editor when clicking on the background area (not the editor itself)
                         // Using mouseDown for immediate response before focus can be lost
@@ -4094,7 +4531,10 @@ body { background: white; }
                       }}
                       onContextMenu={handleEditorContextMenu}
                     >
-                      {/* Vertical Ruler - fixed on left edge (hidden when readOnly prop is set) */}
+                      {/* Vertical Ruler - sits at the editor content's left
+                          edge so it scrolls horizontally with the page instead
+                          of pinning to the viewport (which would lay over the
+                          doc when the user scrolls right). */}
                       {showRuler && !readOnlyProp && (
                         <div
                           style={{
@@ -4102,7 +4542,10 @@ body { background: white; }
                             left: 0,
                             top: 0,
                             zIndex: 10,
-                            paddingTop: 48, // paged-editor__pages and layout padding-top
+                            // Must match `.paged-editor__pages` padding-top in
+                            // editor.css (24 viewport + 24 pages container);
+                            // update both together or the ruler misaligns.
+                            paddingTop: 48,
                           }}
                         >
                           <VerticalRuler
@@ -4236,11 +4679,7 @@ body { background: white; }
                                 items={allSidebarItems}
                                 anchorPositions={anchorPositions}
                                 renderedDomContext={pluginRenderedDomContext ?? null}
-                                pageWidth={(() => {
-                                  const sp =
-                                    history.state?.package?.document?.finalSectionProperties;
-                                  return sp?.pageWidth ? Math.round(sp.pageWidth / 15) : 816;
-                                })()}
+                                pageWidth={pageWidthPx}
                                 zoom={state.zoom}
                                 editorContainerRef={scrollContainerRef}
                                 onExpandedItemChange={setExpandedSidebarItem}
@@ -4251,10 +4690,7 @@ body { background: white; }
                               comments={comments}
                               anchorPositions={anchorPositions}
                               zoom={state.zoom}
-                              pageWidth={(() => {
-                                const sp = history.state?.package?.document?.finalSectionProperties;
-                                return sp?.pageWidth ? Math.round(sp.pageWidth / 15) : 816;
-                              })()}
+                              pageWidth={pageWidthPx}
                               sidebarOpen={sidebarOpen}
                               resolvedCommentIds={resolvedCommentIds}
                               onMarkerClick={() => {
@@ -4399,6 +4835,7 @@ body { background: white; }
                     onHeadingClick={handleHeadingInfoClick}
                     onClose={() => setShowOutline(false)}
                     topOffset={toolbarHeight}
+                    scrollLeft={editorScrollLeft}
                   />
                 )}
 
@@ -4406,7 +4843,14 @@ body { background: white; }
 
                 {/* Outline toggle button — absolutely positioned below toolbar */}
                 {showOutlineButton && !showOutline && (
-                  <OutlineToggleButton onClick={handleToggleOutline} topPx={toolbarHeight + 12} />
+                  <OutlineToggleButton
+                    onClick={handleToggleOutline}
+                    // Aligns with the page top: toolbar + horizontal ruler row
+                    // (22 ruler + 8 py-1 padding) + PagedEditor viewport
+                    // padding-top (24) + pages container padding (24).
+                    topPx={toolbarHeight + (showRuler ? 30 : 0) + 48}
+                    scrollLeft={editorScrollLeft}
+                  />
                 )}
               </div>
               {/* end wrapper for scroll container + outline */}
