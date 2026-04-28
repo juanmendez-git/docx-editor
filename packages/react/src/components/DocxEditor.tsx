@@ -885,6 +885,13 @@ function createComment(text: string, authorName: string, parentId?: number): Com
   };
 }
 
+function getInitialSectionProperties(
+  doc: Document | null | undefined
+): SectionProperties | undefined {
+  const body = doc?.package?.document;
+  return body?.sections?.[0]?.properties ?? body?.finalSectionProperties;
+}
+
 /**
  * DocxEditor - Complete DOCX editor component
  */
@@ -3415,6 +3422,12 @@ body { background: white; }
     ]
   );
 
+  const initialSectionProperties = useMemo(
+    () => getInitialSectionProperties(history.state),
+    [history.state]
+  );
+  const finalSectionProperties = history.state?.package.document?.finalSectionProperties;
+
   // Get header and footer content from document
   const { headerContent, footerContent, firstPageHeaderContent, firstPageFooterContent } = useMemo<{
     headerContent: HeaderFooter | null;
@@ -3432,7 +3445,7 @@ body { background: white; }
     }
 
     const pkg = history.state.package;
-    const sectionProps = pkg.document?.finalSectionProperties;
+    const sectionProps = initialSectionProperties;
     const headers = pkg.headers;
     const footers = pkg.footers;
 
@@ -3475,7 +3488,7 @@ body { background: white; }
       firstPageHeaderContent: firstHeader,
       firstPageFooterContent: firstFooter,
     };
-  }, [history.state]);
+  }, [history.state, initialSectionProperties]);
 
   // Handle header/footer double-click — open editing overlay
   // If no header/footer exists, create an empty one so the user can add content
@@ -4023,7 +4036,7 @@ body { background: white; }
                         }}
                       >
                         <HorizontalRuler
-                          sectionProps={history.state?.package.document?.finalSectionProperties}
+                          sectionProps={initialSectionProperties}
                           zoom={state.zoom}
                           unit={rulerUnit}
                           editable={!readOnly}
@@ -4093,7 +4106,7 @@ body { background: white; }
                           }}
                         >
                           <VerticalRuler
-                            sectionProps={history.state?.package.document?.finalSectionProperties}
+                            sectionProps={initialSectionProperties}
                             zoom={state.zoom}
                             unit={rulerUnit}
                             editable={!readOnly}
@@ -4123,7 +4136,8 @@ body { background: white; }
                         document={history.state}
                         styles={history.state?.package.styles}
                         theme={history.state?.package.theme || theme}
-                        sectionProperties={history.state?.package.document?.finalSectionProperties}
+                        sectionProperties={initialSectionProperties}
+                        finalSectionProperties={finalSectionProperties}
                         headerContent={headerContent}
                         footerContent={footerContent}
                         firstPageHeaderContent={firstPageHeaderContent}

@@ -680,7 +680,7 @@ function convertParagraphAttrs(
   }
 
   // Page break control
-  if (pmAttrs.pageBreakBefore) {
+  if (pmAttrs.pageBreakBefore || pmAttrs.renderedPageBreakBefore) {
     attrs.pageBreakBefore = true;
   }
   if (pmAttrs.keepNext) {
@@ -903,6 +903,12 @@ function convertTableCell(node: PMNode, startPos: number, options: ToFlowBlocksO
   });
 
   const attrs = node.attrs;
+  const widthValue = attrs.width as number | undefined;
+  const widthType = attrs.widthType as string | undefined;
+  const width =
+    widthValue && (!widthType || widthType === 'dxa' || widthType === 'auto')
+      ? twipsToPixels(widthValue)
+      : undefined;
 
   // Convert cell margins (twips) to pixel padding
   // OOXML TableNormal defaults: top=0, bottom=0, left=108 twips (~7px), right=108 twips (~7px)
@@ -921,7 +927,9 @@ function convertTableCell(node: PMNode, startPos: number, options: ToFlowBlocksO
     blocks,
     colSpan: attrs.colspan as number,
     rowSpan: attrs.rowspan as number,
-    width: attrs.width ? twipsToPixels(attrs.width as number) : undefined,
+    width,
+    widthValue,
+    widthType,
     verticalAlign: attrs.verticalAlign as 'top' | 'center' | 'bottom' | undefined,
     background: attrs.backgroundColor ? `#${attrs.backgroundColor}` : undefined,
     borders: extractCellBorders(attrs as Record<string, unknown>, options.theme),

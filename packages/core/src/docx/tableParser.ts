@@ -1022,7 +1022,36 @@ export function parseTableGrid(tblGridElement: XmlElement | null): number[] | un
     widths.push(width);
   }
 
+  if (widths.length > 0 && widths.every((width) => width <= 0)) {
+    return undefined;
+  }
+
   return widths.length > 0 ? widths : undefined;
+}
+
+function getRowGridSpan(row: TableRow): number {
+  return row.cells.reduce((sum, cell) => sum + (cell.formatting?.gridSpan ?? 1), 0);
+}
+
+function inferImplicitSingleCellRowSpans(table: Table): void {
+  const maxColumns = Math.max(
+    table.columnWidths?.length ?? 0,
+    ...table.rows.map((row) => getRowGridSpan(row))
+  );
+  if (maxColumns <= 1) return;
+
+  for (const row of table.rows) {
+    if (row.cells.length !== 1) continue;
+
+    const cell = row.cells[0];
+    const currentSpan = cell.formatting?.gridSpan ?? 1;
+    if (currentSpan >= maxColumns) continue;
+
+    cell.formatting = {
+      ...(cell.formatting ?? {}),
+      gridSpan: maxColumns,
+    };
+  }
 }
 
 // ============================================================================
@@ -1073,6 +1102,8 @@ export function parseTable(
     const row = parseTableRow(rowElement, styles, theme, numbering, rels, media);
     table.rows.push(row);
   }
+
+  inferImplicitSingleCellRowSpans(table);
 
   return table;
 }

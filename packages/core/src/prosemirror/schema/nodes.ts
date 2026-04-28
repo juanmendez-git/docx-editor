@@ -90,6 +90,7 @@ export interface ParagraphAttrs {
 
   // Page break control
   pageBreakBefore?: boolean;
+  renderedPageBreakBefore?: boolean;
   keepNext?: boolean;
   keepLines?: boolean;
   /** Contextual spacing — suppress space between same-style paragraphs */

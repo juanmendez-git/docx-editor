@@ -272,6 +272,7 @@ const paragraphNodeSpec: NodeSpec = {
     shading: { default: null },
     tabs: { default: null },
     pageBreakBefore: { default: null },
+    renderedPageBreakBefore: { default: null },
     keepNext: { default: null },
     keepLines: { default: null },
     contextualSpacing: { default: null },

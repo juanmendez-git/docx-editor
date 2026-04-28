@@ -366,6 +366,9 @@ function paragraphFormattingToAttrs(
       attrs.sectionBreakType = st;
     }
   }
+  if (paragraph.renderedPageBreakBefore) {
+    attrs.renderedPageBreakBefore = true;
+  }
 
   return attrs;
 }
@@ -537,7 +540,11 @@ function convertTable(
 
   // Resolve table borders: prefer table's own borders, fall back to table style's borders
   const tableStyle = tableStyleId ? styleResolver?.getStyle(tableStyleId) : undefined;
-  const resolvedTableBorders = table.formatting?.borders ?? tableStyle?.tblPr?.borders;
+  const implicitTableGridStyle = !tableStyleId ? styleResolver?.getStyle('TableGrid') : undefined;
+  const resolvedTableBorders =
+    table.formatting?.borders ??
+    tableStyle?.tblPr?.borders ??
+    implicitTableGridStyle?.tblPr?.borders;
 
   // Resolve default cell margins: table's own cellMargins > table style's cellMargins
   const tableCellMargins =
@@ -587,8 +594,12 @@ function convertTable(
   const totalRows = table.rows.length;
   const totalColumns =
     columnWidths?.length ??
-    table.rows[0]?.cells.reduce((sum, cell) => sum + (cell.formatting?.gridSpan ?? 1), 0) ??
-    0;
+    Math.max(
+      0,
+      ...table.rows.map((row) =>
+        row.cells.reduce((sum, cell) => sum + (cell.formatting?.gridSpan ?? 1), 0)
+      )
+    );
   const rows = table.rows.map((row, rowIndex) => {
     // Conditional formatting flag: firstRow in tblLook means "apply first-row styling"
     const isFirstRowStyled = rowIndex === 0 && !!look?.firstRow;
@@ -875,6 +886,10 @@ function convertTableCell(
   // Determine width: prefer cell's own width, fall back to grid width
   let width = formatting?.width?.value;
   let widthType = formatting?.width?.type;
+  if (width !== undefined && width <= 0) {
+    width = undefined;
+    widthType = undefined;
+  }
 
   // If cell doesn't have its own width, use the grid-calculated percentage
   if (width === undefined && gridWidthPercent !== undefined) {
@@ -1796,11 +1811,22 @@ export function headerFooterToProseDoc(
  * Check if a paragraph contains a page break in any of its runs
  */
 function paragraphHasPageBreak(paragraph: Paragraph): boolean {
+  let sawVisibleContent = false;
   for (const item of paragraph.content) {
     if (item.type === 'run') {
       for (const content of (item as Run).content) {
         if (content.type === 'break' && content.breakType === 'page') {
-          return true;
+          if (sawVisibleContent) return true;
+          continue;
+        }
+        if (
+          (content.type === 'text' && content.text.length > 0) ||
+          content.type === 'tab' ||
+          content.type === 'drawing' ||
+          content.type === 'shape' ||
+          content.type === 'symbol'
+        ) {
+          sawVisibleContent = true;
         }
       }
     }

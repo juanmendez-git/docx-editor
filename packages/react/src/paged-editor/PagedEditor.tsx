@@ -203,9 +203,10 @@ function findPaintedPmStartAtOrBefore(pages: HTMLElement, pmPos: number): number
 }
 
 /** Min-height of the zoom/viewport wrapper (padding + page stack). Must match JSX `totalHeight`. */
-function viewportMinHeightPx(layout: Layout, pageHeight: number, pageGap: number): number {
+function viewportMinHeightPx(layout: Layout, pageGap: number): number {
   const n = layout.pages.length;
-  return n * pageHeight + Math.max(0, n - 1) * pageGap + VIEWPORT_PADDING_TOP + 24;
+  const pagesHeight = layout.pages.reduce((sum, page) => sum + page.size.h, 0);
+  return pagesHeight + Math.max(0, n - 1) * pageGap + VIEWPORT_PADDING_TOP + 24;
 }
 
 // =============================================================================
@@ -221,6 +222,8 @@ export interface PagedEditorProps {
   theme?: Theme | null;
   /** Section properties (page size, margins). */
   sectionProperties?: SectionProperties | null;
+  /** Body-level final section properties, used after the last explicit section break. */
+  finalSectionProperties?: SectionProperties | null;
   /** Header content for all pages (or pages 2+ when titlePg is set). */
   headerContent?: HeaderFooter | null;
   /** Footer content for all pages (or pages 2+ when titlePg is set). */
@@ -565,46 +568,56 @@ function getColumns(sectionProps: SectionProperties | null | undefined): ColumnL
   };
 }
 
+type SectionMeasureMetrics = {
+  pageSize: { w: number; h: number };
+  margins: PageMargins;
+  columns?: ColumnLayout;
+};
+
+function contentWidthForSection(metrics: SectionMeasureMetrics): number {
+  return metrics.pageSize.w - metrics.margins.left - metrics.margins.right;
+}
+
+function columnWidthForSection(metrics: SectionMeasureMetrics): number {
+  const contentWidth = contentWidthForSection(metrics);
+  const cols = metrics.columns;
+  if (!cols || cols.count <= 1) return contentWidth;
+  return Math.floor((contentWidth - (cols.count - 1) * cols.gap) / cols.count);
+}
+
 /**
  * Compute per-block measurement widths by scanning for section breaks.
- * Blocks in multi-column sections must be measured at column width, not full content width.
- *
- * OOXML note: Each section break carries the CURRENT section's properties.
- * Section N's blocks use config from sectionBreak[N].
- * The final section (after all breaks) uses defaultColumns (body-level).
+ * Blocks must be measured with the page width/margins/columns of their own section.
  */
 function computePerBlockWidths(
   blocks: FlowBlock[],
-  defaultContentWidth: number,
-  defaultColumns: ColumnLayout | undefined
+  initialMetrics: SectionMeasureMetrics,
+  finalMetrics: SectionMeasureMetrics
 ): number[] {
-  function colWidth(cw: number, cols: ColumnLayout): number {
-    if (cols.count <= 1) return cw;
-    return Math.floor((cw - (cols.count - 1) * cols.gap) / cols.count);
-  }
-
-  // Collect section break indices and their column configs
   const breakIndices: number[] = [];
-  const sectionConfigs: ColumnLayout[] = [];
+  const sectionConfigs: SectionMeasureMetrics[] = [];
+  let previousConfig = initialMetrics;
   for (let i = 0; i < blocks.length; i++) {
     if (blocks[i].kind === 'sectionBreak') {
       breakIndices.push(i);
       const sb = blocks[i] as SectionBreakBlock;
-      sectionConfigs.push(sb.columns ?? { count: 1, gap: 0 });
+      const config: SectionMeasureMetrics = {
+        pageSize: sb.pageSize ?? previousConfig.pageSize,
+        margins: sb.margins ?? previousConfig.margins,
+        columns: sb.columns,
+      };
+      sectionConfigs.push(config);
+      previousConfig = config;
     }
   }
-  // Final section uses body-level columns
-  sectionConfigs.push(defaultColumns ?? { count: 1, gap: 0 });
+  sectionConfigs.push(finalMetrics);
 
-  // Assign widths: section N's blocks use sectionConfigs[N]
   let sectionIdx = 0;
   const widths: number[] = [];
 
   for (let i = 0; i < blocks.length; i++) {
-    const cols = sectionConfigs[sectionIdx];
-    widths.push(colWidth(defaultContentWidth, cols));
+    widths.push(columnWidthForSection(sectionConfigs[sectionIdx] ?? initialMetrics));
 
-    // After this section break, move to next section
     if (sectionIdx < breakIndices.length && i === breakIndices[sectionIdx]) {
       sectionIdx++;
     }
@@ -657,6 +670,73 @@ function resolveTableWidthPx(
   return undefined;
 }
 
+function countTableColumns(tableBlock: TableBlock): number {
+  return Math.max(
+    1,
+    ...tableBlock.rows.map((row) =>
+      row.cells.reduce((sum, cell) => sum + Math.max(1, cell.colSpan ?? 1), 0)
+    )
+  );
+}
+
+function normalizeTableColumnWidths(
+  columnWidths: number[],
+  colCount: number,
+  targetWidth: number
+): number[] {
+  if (columnWidths.length === 0) {
+    return Array(colCount).fill(targetWidth / colCount);
+  }
+
+  let normalized = columnWidths.slice(0, colCount);
+  const missingColumns = colCount - normalized.length;
+  if (missingColumns > 0) {
+    const existingPositive = normalized.filter((width) => width > 0);
+    const fallbackWidth =
+      existingPositive.length > 0
+        ? existingPositive.reduce((sum, width) => sum + width, 0) / existingPositive.length
+        : targetWidth / colCount;
+    normalized = normalized.concat(Array(missingColumns).fill(fallbackWidth));
+  }
+
+  const positiveTotal = normalized.reduce((sum, width) => sum + (width > 0 ? width : 0), 0);
+  const nonPositiveCount = normalized.filter((width) => width <= 0).length;
+
+  if (positiveTotal <= 0) {
+    return Array(colCount).fill(targetWidth / colCount);
+  }
+
+  if (nonPositiveCount === 0) {
+    return normalized;
+  }
+
+  const remainingWidth = Math.max(0, targetWidth - positiveTotal);
+  const fallbackWidth =
+    remainingWidth > 0
+      ? remainingWidth / nonPositiveCount
+      : positiveTotal / (colCount - nonPositiveCount);
+
+  return normalized.map((width) => (width > 0 ? width : fallbackWidth));
+}
+
+function resolveCellWidthPx(cell: TableBlock['rows'][number]['cells'][number], tableWidth: number) {
+  if (cell.width && cell.width > 0) return cell.width;
+  if (!cell.widthValue || cell.widthValue <= 0) return undefined;
+
+  if (cell.widthType === 'pct') {
+    // DOCX pct widths are normally 50ths of a percent (5000 = 100%).
+    // Some internal grid fallbacks are stored as plain percentages.
+    const ratio = cell.widthValue > 100 ? cell.widthValue / 5000 : cell.widthValue / 100;
+    return tableWidth * ratio;
+  }
+
+  if (!cell.widthType || cell.widthType === 'dxa' || cell.widthType === 'auto') {
+    return Math.round((cell.widthValue / 20) * 1.333);
+  }
+
+  return undefined;
+}
+
 function measureTableBlock(tableBlock: TableBlock, contentWidth: number): TableMeasure {
   const DEFAULT_CELL_PADDING_X = 7; // Word default: 108 twips ≈ 7px
   const DEFAULT_CELL_PADDING_Y = 0; // OOXML/TableNormal default: top=0, bottom=0
@@ -664,14 +744,14 @@ function measureTableBlock(tableBlock: TableBlock, contentWidth: number): TableM
   // columnWidths are already in pixels (converted in toFlowBlocks)
   let columnWidths = tableBlock.columnWidths ?? [];
   const explicitWidthPx = resolveTableWidthPx(tableBlock.width, tableBlock.widthType, contentWidth);
+  const colCount = countTableColumns(tableBlock);
+  const targetWidth = explicitWidthPx ?? contentWidth;
 
-  if (columnWidths.length === 0 && tableBlock.rows.length > 0) {
-    // Determine total columns from first row's colSpans
-    const colCount = tableBlock.rows[0].cells.reduce((sum, cell) => sum + (cell.colSpan ?? 1), 0);
-    const totalWidth = explicitWidthPx ?? contentWidth;
-    const equalWidth = totalWidth / Math.max(1, colCount);
-    columnWidths = Array(colCount).fill(equalWidth);
-  } else if (columnWidths.length > 0 && explicitWidthPx) {
+  if (tableBlock.rows.length > 0) {
+    columnWidths = normalizeTableColumnWidths(columnWidths, colCount, targetWidth);
+  }
+
+  if (columnWidths.length > 0 && explicitWidthPx) {
     const totalWidth = columnWidths.reduce((sum, w) => sum + w, 0);
     if (totalWidth > 0 && Math.abs(totalWidth - explicitWidthPx) > 1) {
       const scale = explicitWidthPx / totalWidth;
@@ -725,7 +805,7 @@ function measureTableBlock(tableBlock: TableBlock, contentWidth: number): TableM
         }
         // Fallback to cell.width or default if columnWidths not available
         if (cellWidth === 0) {
-          cellWidth = cell.width ?? 100;
+          cellWidth = resolveCellWidthPx(cell, targetWidth) ?? 100;
         }
         columnIndex += colSpan;
         while (occupied.has(columnIndex)) columnIndex++;
@@ -753,11 +833,27 @@ function measureTableBlock(tableBlock: TableBlock, contentWidth: number): TableM
     for (let cellIdx = 0; cellIdx < row.cells.length; cellIdx++) {
       const cell = row.cells[cellIdx];
       const sourceCell = sourceRowCells?.[cellIdx];
-      cell.height = cell.blocks.reduce((h, m) => {
-        // Get height from any measure type (paragraph or table)
-        if ('totalHeight' in m) return h + m.totalHeight;
-        return h;
-      }, 0);
+      let contentHeight = 0;
+      let previousParagraphAfter = 0;
+
+      for (let blockIdx = 0; blockIdx < cell.blocks.length; blockIdx++) {
+        const blockMeasure = cell.blocks[blockIdx];
+        const sourceBlock = sourceCell?.blocks[blockIdx];
+
+        if (blockMeasure.kind === 'paragraph') {
+          const spacing =
+            sourceBlock?.kind === 'paragraph' ? sourceBlock.attrs?.spacing : undefined;
+          contentHeight += Math.max(previousParagraphAfter, spacing?.before ?? 0);
+          contentHeight += blockMeasure.totalHeight;
+          previousParagraphAfter = spacing?.after ?? 0;
+        } else if ('totalHeight' in blockMeasure) {
+          contentHeight += previousParagraphAfter;
+          contentHeight += blockMeasure.totalHeight;
+          previousParagraphAfter = 0;
+        }
+      }
+
+      cell.height = contentHeight + previousParagraphAfter;
       const padTop = sourceCell?.padding?.top ?? DEFAULT_CELL_PADDING_Y;
       const padBottom = sourceCell?.padding?.bottom ?? DEFAULT_CELL_PADDING_Y;
       cell.height += padTop + padBottom;
@@ -1654,6 +1750,7 @@ const PagedEditorComponent = forwardRef<PagedEditorRef, PagedEditorProps>(
       styles,
       theme: _theme,
       sectionProperties,
+      finalSectionProperties,
       headerContent,
       footerContent,
       firstPageHeaderContent,
@@ -1846,6 +1943,18 @@ const PagedEditorComponent = forwardRef<PagedEditorRef, PagedEditorProps>(
     const pageSize = useMemo(() => getPageSize(sectionProperties), [sectionProperties]);
     const margins = useMemo(() => getMargins(sectionProperties), [sectionProperties]);
     const columns = useMemo(() => getColumns(sectionProperties), [sectionProperties]);
+    const finalPageSize = useMemo(
+      () => getPageSize(finalSectionProperties ?? sectionProperties),
+      [finalSectionProperties, sectionProperties]
+    );
+    const finalMargins = useMemo(
+      () => getMargins(finalSectionProperties ?? sectionProperties),
+      [finalSectionProperties, sectionProperties]
+    );
+    const finalColumns = useMemo(
+      () => getColumns(finalSectionProperties ?? sectionProperties),
+      [finalSectionProperties, sectionProperties]
+    );
     const contentWidth = pageSize.w - margins.left - margins.right;
 
     // Initialize painter using useMemo to ensure it's ready before first render callbacks
@@ -1921,7 +2030,11 @@ const PagedEditorComponent = forwardRef<PagedEditorRef, PagedEditorProps>(
           // neighboring paragraphs' line widths.
           stepStart = performance.now();
           // Compute per-block widths accounting for section breaks with different column configs
-          const blockWidths = computePerBlockWidths(newBlocks, contentWidth, columns);
+          const blockWidths = computePerBlockWidths(
+            newBlocks,
+            { pageSize, margins, columns },
+            { pageSize: finalPageSize, margins: finalMargins, columns: finalColumns }
+          );
           const newMeasures = measureBlocks(newBlocks, blockWidths);
           stepTime = performance.now() - stepStart;
           if (stepTime > 1000) {
@@ -2001,7 +2114,7 @@ const PagedEditorComponent = forwardRef<PagedEditorRef, PagedEditorProps>(
           let footnoteContentMap = new Map<number, { displayNumber: number; height: number }>();
 
           // Common layout options for all passes
-          const bodyBreakType = sectionProperties?.sectionStart as
+          const bodyBreakType = finalSectionProperties?.sectionStart as
             | 'continuous'
             | 'nextPage'
             | 'evenPage'
@@ -2010,7 +2123,9 @@ const PagedEditorComponent = forwardRef<PagedEditorRef, PagedEditorProps>(
           const layoutOpts = {
             pageSize,
             margins: effectiveMargins,
-            columns,
+            finalPageSize,
+            finalMargins,
+            columns: finalColumns,
             bodyBreakType,
             pageGap,
           };
@@ -2147,7 +2262,7 @@ const PagedEditorComponent = forwardRef<PagedEditorRef, PagedEditorProps>(
 
             const vp = viewportLayoutRef.current;
             if (vp) {
-              const mh = viewportMinHeightPx(newLayout, pageSize.h, pageGap);
+              const mh = viewportMinHeightPx(newLayout, pageGap);
               vp.style.minHeight = `${mh}px`;
               if (zoom !== 1) {
                 vp.style.marginBottom = `${mh * (zoom - 1)}px`;
@@ -2226,6 +2341,9 @@ const PagedEditorComponent = forwardRef<PagedEditorRef, PagedEditorProps>(
         columns,
         pageSize,
         margins,
+        finalPageSize,
+        finalMargins,
+        finalColumns,
         pageGap,
         zoom,
         syncCoordinator,
@@ -2234,6 +2352,7 @@ const PagedEditorComponent = forwardRef<PagedEditorRef, PagedEditorProps>(
         firstPageHeaderContent,
         firstPageFooterContent,
         sectionProperties,
+        finalSectionProperties,
         onRenderedDomContextReady,
         document,
         resolvedCommentIds,
@@ -4398,8 +4517,9 @@ const PagedEditorComponent = forwardRef<PagedEditorRef, PagedEditorProps>(
     const totalHeight = useMemo(() => {
       if (!layout) return DEFAULT_PAGE_HEIGHT + 48;
       const numPages = layout.pages.length;
-      return numPages * pageSize.h + (numPages - 1) * pageGap + 48;
-    }, [layout, pageSize.h, pageGap]);
+      const pagesHeight = layout.pages.reduce((sum, page) => sum + page.size.h, 0);
+      return pagesHeight + (numPages - 1) * pageGap + 48;
+    }, [layout, pageGap]);
 
     return (
       <div

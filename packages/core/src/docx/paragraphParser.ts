@@ -626,6 +626,64 @@ function getLocalName(name: string | undefined): string {
   return colonIndex >= 0 ? name.substring(colonIndex + 1) : name;
 }
 
+function paragraphStartsWithRenderedPageBreak(node: XmlElement): boolean {
+  let sawRenderedPageBreak = false;
+  const nonContentMarkers = new Set([
+    'pPr',
+    'proofErr',
+    'bookmarkStart',
+    'bookmarkEnd',
+    'commentRangeStart',
+    'commentRangeEnd',
+    'permStart',
+    'permEnd',
+  ]);
+  const visibleRunContent = new Set([
+    't',
+    'tab',
+    'br',
+    'cr',
+    'sym',
+    'drawing',
+    'pict',
+    'object',
+    'softHyphen',
+    'noBreakHyphen',
+  ]);
+
+  for (const child of getChildElements(node)) {
+    const childName = getLocalName(child.name);
+    if (nonContentMarkers.has(childName)) continue;
+
+    if (childName === 'r') {
+      for (const runChild of getChildElements(child)) {
+        const runChildName = getLocalName(runChild.name);
+        if (runChildName === 'rPr') continue;
+        if (runChildName === 'lastRenderedPageBreak') {
+          sawRenderedPageBreak = true;
+          continue;
+        }
+        if (runChildName === 'br' && getAttribute(runChild, 'w', 'type') === 'page') {
+          return true;
+        }
+        if (visibleRunContent.has(runChildName)) {
+          return sawRenderedPageBreak;
+        }
+      }
+      continue;
+    }
+
+    if (childName === 'lastRenderedPageBreak') {
+      sawRenderedPageBreak = true;
+      continue;
+    }
+
+    return false;
+  }
+
+  return false;
+}
+
 type TrackedChangeParseContext = 'default' | 'deletion';
 
 function replaceLocalName(name: string | undefined, localName: string): string {
@@ -1191,6 +1249,10 @@ export function parseParagraph(
   const textId = getAttribute(node, 'w14', 'textId') ?? getAttribute(node, 'w', 'textId');
   if (textId) {
     paragraph.textId = textId;
+  }
+
+  if (paragraphStartsWithRenderedPageBreak(node)) {
+    paragraph.renderedPageBreakBefore = true;
   }
 
   // Parse paragraph properties (w:pPr)
