@@ -752,5 +752,10 @@
   },
   "loading": {
     "label": "Carregando"
+  },
+  "agentPanel": {
+    "close": null,
+    "defaultTitle": null,
+    "toggle": null
   }
 }
