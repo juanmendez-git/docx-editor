@@ -36,7 +36,11 @@
     "tableOfContents": "Spis treści",
     "symbol": "Symbol",
     "help": "Pomoc",
-    "reportIssue": "Zgłoś problem"
+    "reportIssue": "Zgłoś problem",
+    "open": "Otwórz",
+    "openShortcut": "Ctrl+O",
+    "save": "Zapisz",
+    "saveShortcut": "Ctrl+S"
   },
   "formattingBar": {
     "groups": {

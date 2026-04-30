@@ -1105,11 +1105,51 @@ function findParaIdRange(
  *   - searchText is not found
  *   - searchText appears more than once (ambiguous; caller must disambiguate)
  *
- * The fullText is built from PM text nodes only — agents must search using the
- * visible text returned by `read_document` with annotations stripped (the bridge
- * passes includeTrackedChanges/includeCommentAnchors=false for read_document by
- * default, so the agent never sees [+...+] / [comment:N] markers in search input).
+ * The fullText is built from PM text nodes only and matches the vanilla view
+ * the agent reads via `read_document` (the bridge passes includeTrackedChanges/
+ * includeCommentAnchors=false): tracked insertions are excluded (not in the doc
+ * yet), tracked deletions are included (still in the doc until accepted), and
+ * comment markers are stripped.
  */
+/**
+ * Vanilla-view text of a single PM node (typically a paragraph): concatenates
+ * descendant text node content, skipping any text inside an `insertion` mark.
+ * Use this in any agent-facing read path so the agent's view of the document
+ * matches what `add_comment` / `suggest_change` can anchor.
+ */
+function getVanillaNodeText(node: import('prosemirror-model').Node): string {
+  const parts: string[] = [];
+  node.descendants((child) => {
+    if (!child.isText || !child.text) return true;
+    if (child.marks.some((m) => m.type.name === 'insertion')) return false;
+    parts.push(child.text);
+    return true;
+  });
+  return parts.join('');
+}
+
+/**
+ * Vanilla-view text between two doc positions. Same semantics as
+ * `getVanillaNodeText`, but takes a PM position range so it can serve a
+ * selection rather than a single node.
+ */
+function getVanillaTextBetween(
+  doc: import('prosemirror-model').Node,
+  from: number,
+  to: number
+): string {
+  if (from >= to) return '';
+  const parts: string[] = [];
+  doc.nodesBetween(from, to, (child, pos) => {
+    if (!child.isText || !child.text) return;
+    if (child.marks.some((m) => m.type.name === 'insertion')) return;
+    const start = Math.max(from, pos);
+    const end = Math.min(to, pos + child.text.length);
+    if (start < end) parts.push(child.text.slice(start - pos, end - pos));
+  });
+  return parts.join('');
+}
+
 function findTextInPmParagraph(
   doc: import('prosemirror-model').Node,
   paragraphFrom: number,
@@ -1122,10 +1162,11 @@ function findTextInPmParagraph(
   const textPositions: { pos: number; len: number }[] = [];
 
   doc.nodesBetween(paragraphFrom, paragraphTo, (node, pos) => {
-    if (node.isText && node.text) {
-      textPositions.push({ pos, len: node.text.length });
-      fullText += node.text;
-    }
+    if (!node.isText || !node.text) return;
+    // Vanilla view: text inside an `insertion` mark isn't in the doc yet.
+    if (node.marks.some((m) => m.type.name === 'insertion')) return;
+    textPositions.push({ pos, len: node.text.length });
+    fullText += node.text;
   });
 
   const firstMatch = fullText.indexOf(searchText);
@@ -1518,6 +1559,7 @@ export const DocxEditor = forwardRef<DocxEditorRef, DocxEditorProps>(function Do
   // Save the last known selection for restoring after toolbar interactions
   const lastSelectionRef = useRef<{ from: number; to: number } | null>(null);
   const imageInputRef = useRef<HTMLInputElement>(null);
+  const docxInputRef = useRef<HTMLInputElement>(null);
   const editorContentRef = useRef<HTMLDivElement>(null);
   const scrollContainerRef = useRef<HTMLDivElement>(null);
   const toolbarWrapperRef = useRef<HTMLDivElement>(null);
@@ -3576,6 +3618,42 @@ body { background: white; }
     onPrint?.();
   }, [onPrint]);
 
+  const handleDownloadDocument = useCallback(async () => {
+    const buffer = await handleSave();
+    if (!buffer) return;
+    const blob = new Blob([buffer], {
+      type: 'application/vnd.openxmlformats-officedocument.wordprocessingml.document',
+    });
+    const url = URL.createObjectURL(blob);
+    const a = window.document.createElement('a');
+    a.href = url;
+    a.download = `${(documentName?.trim() || 'document').replace(/\.docx$/i, '')}.docx`;
+    a.click();
+    // Defer revoke so Safari has time to start the download.
+    setTimeout(() => URL.revokeObjectURL(url), 0);
+  }, [handleSave, documentName]);
+
+  const handleOpenDocument = useCallback(() => {
+    docxInputRef.current?.click();
+  }, []);
+
+  const handleDocxFileChange = useCallback(
+    async (event: React.ChangeEvent<HTMLInputElement>) => {
+      const file = event.target.files?.[0];
+      // Reset so picking the same file twice still fires `change`.
+      event.target.value = '';
+      if (!file) return;
+      try {
+        const buffer = await file.arrayBuffer();
+        await loadBuffer(buffer);
+        onDocumentNameChange?.(file.name.replace(/\.docx$/i, ''));
+      } catch (error) {
+        onError?.(error instanceof Error ? error : new Error('Failed to open document'));
+      }
+    },
+    [loadBuffer, onDocumentNameChange, onError]
+  );
+
   // ============================================================================
   // FIND/REPLACE HANDLERS
   // ============================================================================
@@ -4059,7 +4137,7 @@ body { background: white; }
           seen.add(paraId);
           paragraphs.push({
             paraId,
-            text: node.textContent,
+            text: getVanillaNodeText(node),
             styleId: (node.attrs?.styleId as string | undefined) ?? undefined,
           });
         }
@@ -4088,7 +4166,7 @@ body { background: white; }
           if (!node.isTextblock) return true;
           const paraId = node.attrs?.paraId as string | undefined;
           if (!paraId) return false;
-          const text = node.textContent;
+          const text = getVanillaNodeText(node);
           const haystack = caseSensitive ? text : text.toLowerCase();
           const at = haystack.indexOf(needle);
           if (at === -1) return false;
@@ -4121,16 +4199,20 @@ body { background: white; }
         const para = depth > 0 ? $from.node(depth) : null;
         if (!para) return null;
         const paraId = (para.attrs?.paraId as string | undefined) ?? null;
-        const paragraphText = para.textContent;
-        const selectedText = doc.textBetween(selection.from, selection.to, '\n');
         const paraStart = $from.start(depth);
-        const offsetInPara = selection.from - paraStart;
+        const paraEnd = paraStart + para.content.size;
+        // Vanilla view: build before/selectedText/after independently from the
+        // doc so the result matches what the agent reads via read_document and
+        // can anchor via add_comment. Insertion-marked text never appears.
+        const before = getVanillaTextBetween(doc, paraStart, selection.from);
+        const selectedText = getVanillaTextBetween(doc, selection.from, selection.to);
+        const after = getVanillaTextBetween(doc, selection.to, paraEnd);
         return {
           paraId,
           selectedText,
-          paragraphText,
-          before: paragraphText.slice(0, offsetInPara),
-          after: paragraphText.slice(offsetInPara + selectedText.length),
+          paragraphText: before + selectedText + after,
+          before,
+          after,
         };
       },
 
@@ -4757,6 +4839,8 @@ body { background: white; }
                       showPrintButton={showPrintButton}
                       fontFamilies={fontFamilies}
                       onPrint={handleDirectPrint}
+                      onOpen={handleOpenDocument}
+                      onSave={handleDownloadDocument}
                       showZoomControl={showZoomControl}
                       zoom={state.zoom}
                       onZoomChange={handleZoomChange}
@@ -5362,6 +5446,14 @@ body { background: white; }
               accept="image/*"
               style={{ display: 'none' }}
               onChange={handleImageFileChange}
+            />
+            {/* Hidden file input for File → Open */}
+            <input
+              ref={docxInputRef}
+              type="file"
+              accept=".docx,application/vnd.openxmlformats-officedocument.wordprocessingml.document"
+              style={{ display: 'none' }}
+              onChange={handleDocxFileChange}
             />
           </div>
         </ErrorBoundary>

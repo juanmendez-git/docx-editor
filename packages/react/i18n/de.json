@@ -36,7 +36,11 @@
     "tableOfContents": "Inhaltsverzeichnis",
     "symbol": "Symbol",
     "help": "Hilfe",
-    "reportIssue": "Problem melden"
+    "reportIssue": "Problem melden",
+    "open": "Öffnen",
+    "openShortcut": "Strg+O",
+    "save": "Speichern",
+    "saveShortcut": "Strg+S"
   },
   "formattingBar": {
     "groups": {
